@@ -10,7 +10,13 @@ export function createSidebar(): HTMLElement {
     icon("compose"),
     h("span", { class: "nav-label" }, "New Chat"),
   );
-  // Appears only while an update is waiting: one dot, one line, one verb.
+  // The foot: settings in the corner, and — only while an update is waiting —
+  // one dot, one line, one verb.
+  const settings = h(
+    "button",
+    { class: "icon-btn", title: "Settings (⌘,)", "aria-label": "Settings", onclick: () => (store.state.view === "settings" ? actions.closeSettings() : actions.openSettings()) },
+    icon("gear"),
+  );
   const updateRow = h("button", { class: "update-row", hidden: true, onclick: () => void actions.installUpdate() }, h("span", { class: "dot" }), h("span", { class: "update-text" }));
   const inner = h(
     "div",
@@ -18,13 +24,14 @@ export function createSidebar(): HTMLElement {
     h("div", { class: "sidebar-head", "data-tauri-drag-region": "" }),
     h("div", { class: "nav" }, newChat),
     list,
-    updateRow,
+    h("div", { class: "sidebar-foot" }, settings, updateRow),
   );
   const root = h("aside", { class: "sidebar" }, inner);
 
   let signature = "";
   const render = (s: State) => {
     newChat.classList.toggle("selected", s.currentId === null && s.view === "chat" && !s.session);
+    settings.classList.toggle("on", s.view === "settings");
     const u = s.update;
     updateRow.hidden = !u;
     if (u) {
@@ -107,20 +114,13 @@ export function createSidebar(): HTMLElement {
   return root;
 }
 
-/** Sidebar toggle and settings sit beside the traffic lights, fixed to the
- *  window, so they stay put while the sidebar slides under them. */
+/** The sidebar toggle sits beside the traffic lights, fixed to the window, so
+ *  it stays put while the sidebar slides under it. */
 export function createWindowControls(): HTMLElement {
-  const settings = h(
-    "button",
-    { class: "icon-btn", title: "Settings (⌘,)", "aria-label": "Settings", onclick: () => (store.state.view === "settings" ? actions.closeSettings() : actions.openSettings()) },
-    icon("gear"),
-  );
-  store.subscribe((s) => settings.classList.toggle("on", s.view === "settings"));
   return h(
     "div",
     { class: "window-controls", "data-tauri-drag-region": "" },
     h("button", { class: "icon-btn", title: "Toggle Sidebar (⌃⌘S)", "aria-label": "Toggle Sidebar", onclick: () => actions.toggleSidebar() }, icon("sidebar")),
-    settings,
   );
 }
 

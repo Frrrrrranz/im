@@ -15,11 +15,11 @@ npm run tauri build          # release .app + updater archive in src-tauri/targe
 
 ## Using it
 
-1. **Settings (⌘, or the gear beside the traffic lights) → Add Provider.** Pick a preset (OpenAI, Anthropic,
-   OpenRouter, DeepSeek, Ollama) or *Custom*. Set the base URL up to and
-   including the version segment (`https://api.openai.com/v1`), paste an API
-   key, and either type model ids (one per line) or press **Fetch**. Every
-   field saves as soon as you leave it — there is no Save button.
+1. **Settings (⌘, or the gear at the bottom of the sidebar) → Add Provider.**
+   Name it, pick the protocol, set the base URL up to and including the
+   version segment (`https://api.openai.com/v1`), paste an API key, and either
+   type model ids (one per line) or press **Fetch**. Every field saves as soon
+   as you leave it — there is no Save button.
 2. Close Settings, choose a model from the name at the top of the window
    (⌘K), and type. **Return** sends, **Shift-Return** inserts a newline; when
    an IME composition is active, Return commits the composition instead.
@@ -32,7 +32,7 @@ ttft · total` line (hover it for the long form); the newest message shows its
 line all the time. Right-click for the same as a
 native menu. Reasoning, when the provider streams it, appears as a
 collapsible *Thought for …* block above the answer. Code blocks have line
-numbers and a copy button. An ```html block renders itself: a preview pane
+numbers and a copy button. An ```html (or ```svg) block renders itself: a preview pane
 sits at the top of the block and shows the page live while the code is still
 being written beneath it. Click the pane
 to enlarge it to the middle of the window — there the page is interactive —
@@ -55,11 +55,12 @@ put, with a small **↓** above the composer to jump back.
 | ⌘E | Edit newest prompt |
 | ⌘⇧[ / ⌘⇧] | Previous / next chat |
 | ⌘⇧E | Export chat as JSON |
-| ⌘W | Hide window (click the Dock icon to bring it back) |
+| ⌘W / red button | Hide the window (click the Dock icon to bring it back) |
 
 Chats are renamed by double-clicking them in the sidebar, deleted from the
 right-click menu or **File → Delete Chat**. Both side columns can be dragged
-wider or narrower at their inner edge; double-click the edge to reset.
+wider or narrower at their inner edge, and on a wide window the reading column
+itself can be dragged at either edge; double-click an edge to reset.
 
 ### Trajectory
 
@@ -78,7 +79,7 @@ Everything lives in `~/Library/Application Support/im/` (**File → Show Data
 Folder**). Set `IM_DATA_DIR` to use another location.
 
 ```text
-settings.json          appearance, default model, system prompt, max_tokens
+settings.json          appearance, default model, system prompt, column widths
 providers.json         endpoints + model lists      (no secrets)
 keys.json              { "<provider id>": "<api key>" }   mode 0600
 sessions/<ulid>.json   one chat per file
@@ -149,7 +150,7 @@ Design rules for the schema:
 | `protocol` | Request | Reasoning captured from | Usage from |
 |---|---|---|---|
 | `chat` | `POST {base_url}/chat/completions`, `stream: true`, `stream_options.include_usage`; earlier replies are replayed with their `reasoning_content` | `delta.reasoning_content` / `delta.reasoning` | final `usage` chunk |
-| `anthropic` | `POST {base_url}/messages`, `stream: true`, `max_tokens` from Settings | `thinking_delta` | `message_start` + `message_delta` |
+| `anthropic` | `POST {base_url}/messages`, `stream: true`, `max_tokens` (8192) | `thinking_delta` | `message_start` + `message_delta` |
 | `responses` | `POST {base_url}/responses`, `stream: true`, `store: false` | `response.reasoning_summary_text.delta` | `response.completed` |
 
 Model lists come from `GET {base_url}/models` for all three. Requests carry

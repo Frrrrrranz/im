@@ -185,6 +185,18 @@ const SAMPLE_HTML = `Here's a minimal one:
 
 Drop it in a file and open it.`;
 
+const SAMPLE_SVG = `A sleeping cat, roughly:
+
+\`\`\`svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="400" height="240">
+  <path d="M40 70 q30 -40 60 -10 q30 -30 60 10 q-10 30 -60 30 q-50 0 -60 -30z" fill="none" stroke="#1d1d1f" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M70 62 q10 6 20 0 M110 62 q10 6 20 0" fill="none" stroke="#1d1d1f" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="100" cy="76" r="3" fill="#1d1d1f"/>
+</svg>
+\`\`\`
+
+Save it as cat.svg.`;
+
 function mockBackend(): Backend {
   const params = new URLSearchParams(location.search);
   const state = params.get("state") ?? "chat";
@@ -267,6 +279,11 @@ function mockBackend(): Backend {
       const s = sessions.get("s1")!;
       s.messages.push({ role: "user", content: "Make me a tiny landing page.", created_at: now() });
       s.messages.push({ role: "assistant", content: SAMPLE_HTML, created_at: now(), meta: meta("anthropic/claude-sonnet-4", 310) });
+    }
+    if (state === "svg") {
+      const s = sessions.get("s1")!;
+      s.messages.push({ role: "user", content: "Draw the cat as an SVG.", created_at: now() });
+      s.messages.push({ role: "assistant", content: SAMPLE_SVG, created_at: now(), meta: meta("anthropic/claude-sonnet-4", 120) });
     }
   }
 

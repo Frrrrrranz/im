@@ -85,6 +85,8 @@ export interface Settings {
   sidebar_width?: number;
   inspector_visible: boolean;
   inspector_width?: number;
+  /** Width of the transcript/composer column in CSS px. */
+  column_width?: number;
 }
 
 export type TurnKind =

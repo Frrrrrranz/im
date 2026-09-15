@@ -23,6 +23,24 @@ async function main() {
   const composer = createComposer();
   composer.prepend(transcript.jump);
   const chat = h("div", { class: "chat" }, transcript.el, composer);
+  // On a wide window the reading column can be widened from either edge; the
+  // column is centred, so one edge moving by dx widens it by 2dx.
+  for (const edge of ["left", "right"] as const) {
+    chat.append(
+      Object.assign(
+        createResizer({
+          varName: "--column-w",
+          setting: "column",
+          edge,
+          factor: 2,
+          min: 480,
+          max: () => chat.clientWidth - 48,
+          fallback: 720,
+        }),
+        { className: `resizer column-handle ${edge}` },
+      ),
+    );
+  }
   const main = h("main", { class: "main" }, createTopbar(), chat, createSettings(backend));
   // Drag handles straddle the column edges (5px each side), so they are not
   // clipped by the columns' overflow and are easy to hit.
@@ -48,7 +66,7 @@ async function main() {
     chat.hidden = s.view !== "chat";
     document.body.classList.toggle("no-sidebar", !s.settings.sidebar_visible);
     document.body.classList.toggle("no-inspector", !s.settings.inspector_visible);
-    applyColumnWidths(s.settings.sidebar_width, s.settings.inspector_width);
+    applyColumnWidths(s.settings.sidebar_width, s.settings.inspector_width, s.settings.column_width);
     if (s.fatal) app.append(h("div", { class: "fatal" }, s.fatal));
   });
 
@@ -106,6 +124,10 @@ function applyScenario({ state, autosend }: { state?: string | null; autosend?: 
         const t = document.querySelector(".transcript")!;
         t.scrollTop = Math.max(0, t.scrollHeight - t.clientHeight - 500);
       });
+      break;
+    case "close":
+      // Debug: ask the window to close the way the red button does; it must hide, not die.
+      setTimeout(() => void import("@tauri-apps/api/window").then((m) => m.getCurrentWindow().close()), 800);
       break;
     case "resized": {
       // Synthetic drags on both handles: sidebar +80px, inspector +60px.
@@ -198,4 +220,15 @@ function installBrowserShortcuts() {
   });
 }
 
-void main();
+main().catch(async (e) => {
+  // Never leave a hidden window behind: show it and say what went wrong.
+  console.error(e);
+  const app = document.getElementById("app");
+  app?.append(h("div", { class: "fatal" }, String(e)));
+  try {
+    const backend = await createBackend();
+    await backend.showWindow();
+  } catch {
+    /* nothing left to try */
+  }
+});

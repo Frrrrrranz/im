@@ -198,6 +198,9 @@ pub struct Settings {
     pub inspector_visible: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inspector_width: Option<u32>,
+    /// Width of the transcript/composer column in CSS px; absent = the stylesheet default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column_width: Option<u32>,
 }
 
 fn default_max_tokens() -> u32 {
@@ -220,6 +223,7 @@ impl Default for Settings {
             sidebar_width: None,
             inspector_visible: false,
             inspector_width: None,
+            column_width: None,
         }
     }
 }

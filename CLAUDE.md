@@ -25,7 +25,13 @@ GitHub Pages at im.linghaoz.com (`.github/workflows/pages.yml`, custom domain se
 via the Pages API; DNS is a CNAME to yetlinghao.github.io). `install.sh` (repo
 root, copied into the site at deploy) is the primary install path: no
 quarantine flag → no Gatekeeper. The page is deliberately just icon, slogan,
-one line, the command — the user vetoed screenshots and a dmg link. The updater
+one line, the command, and one figure (`.why`: im / Cherry Studio / ChatGPT as
+three rows × two bar columns, "Download" 5 MB · 500 MB · 1.39 GB on a linear
+scale and "What it covers" ~90 · 95 · 100 %, the extra slice in a lighter gray,
+two legend lines naming the everyday vs. the other 10%) — the user vetoed
+screenshots, a dmg link and a grow-in animation on the bars; plain CSS, no JS.
+Headless Chrome won't go below ~500px wide, so check the mobile layout at 500,
+not 390. The updater
 (`tauri-plugin-updater`) polls `releases/latest/download/latest.json`; its
 public key is in `tauri.conf.json`, the private key is `~/.tauri/im.key` on
 the user's Mac and the `TAURI_SIGNING_PRIVATE_KEY` repo secret — never in the
@@ -85,16 +91,23 @@ src/
   ui/           sidebar, topbar (+ model picker), transcript, composer, settings, inspector — plain DOM via `h()`
   ui/inspector  right column: the session as a trajectory (map + turn list + on-disk JSON); click a row → transcript
   ui/settings   System-Settings-style grouped lists; every field saves on change; provider cards keyed by id and
-                updated in place so a save never steals focus; "Add Provider" is a native menu of `presets.ts`
-  ui/resizer    drag handles for both columns, mounted in `#app` straddling the column edge (10px, below the
-                header strip); write `--sidebar-w`/`--inspector-w` live, persist on mouse-up, double-click resets
+                updated in place so a save never steals focus. "Add Provider" opens an empty *draft* card (no
+                presets — the user removed them); it is written the moment it has a name (id = slug of the name).
+                No max-tokens control (the stored `max_tokens` keeps its default)
+  ui/resizer    drag handles for both side columns (mounted in `#app`, 10px straddling the edge) and for the
+                reading column (`.column-handle` at both edges of `.chat`, factor 2 because it is centred; a faint
+                line shows on hover); write `--sidebar-w`/`--inspector-w`/`--column-w` live, persist on mouse-up,
+                double-click resets
   ui/htmlpane   live HTML preview *inside* an ```html code block: a pane fixed at the top of the block renders
-                the code as it streams (two sandboxed blob: iframes cross-fade so the page never flashes); click
+                the code as it streams. Two sandboxed blob: iframes: the new one waits two frames after `load`
+                (load fires before first paint) and fades in *on top* (`.top`) while the old one stays opaque
+                underneath — fading both at once let white through, which read as a flash; click
                 → grows from its own rect to the centre of `.main`, Quick Look style; Esc/backdrop/⤡ return it
   markdown.ts   marked + DOMPurify → fragment. Code block anatomy: `pre.code > (.code-preview?) .code-body >
-                (.code-bar, .code-scroll > (.gutter?, code))` — the scroll box owns horizontal overflow, the pre
-                just clips its corners. The preview pane stays at the top of the block (not sticky — the user
-                rejected a pane that followed the code down).
+                (.code-bar, .code-row > (.gutter?, .code-scroll > code))` — the gutter is a real flex column and
+                only `.code-scroll` scrolls, so long lines never pass under the numbers. The preview pane stays at
+                the top of the block (not sticky — the user rejected a pane that followed the code down). ```svg
+                blocks are previewed too (wrapped in a centred white page by `svgPage` in transcript.ts).
                 `patchMarkdown(body, fragment)` updates a streaming message in place: equal blocks stay, a code block
                 whose text grew is patched (its iframes survive), the rest is swapped
   styles.css    all visual constants; light-dark() semantic colors only
@@ -134,9 +147,12 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
   when not"). It is `user-select: none` so multi-clicks on the icons can't
   select the text.
   Before adding a control, ask whether a menu item, shortcut or hover would do.
-  The header strip is one 40px band: `● ● ●  [sidebar] [gear]` fixed at the
+  The header strip is one 40px band: `● ● ●  [sidebar toggle]` fixed at the
   left, `[trajectory]` fixed at the right, both columns' headers are drag
-  regions. The inspector's only control is its Turns/JSON segmented switch.
+  regions. Settings lives as a gear in the sidebar's bottom-left corner (the
+  user rejected it beside the traffic lights and in the topbar); the update
+  line shares that foot row. The inspector's only control is its Turns/JSON
+  segmented switch.
 - The side columns are plain vibrancy (`NSVisualEffectMaterial::Sidebar`,
   behind-window), flush with the window edges. A Liquid Glass version
   (`NSGlassEffectView` panes inset 8px) was built and reverted on 2026-09-15
@@ -163,6 +179,15 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
 - Don't schedule anything the app needs in `requestAnimationFrame` before the
   window is visible: WebKit doesn't run frames for hidden windows (this is why
   `showWindow()` is awaited directly after `init()`).
+- Window lifecycle: the app is single-window and stays alive without one
+  (`ExitRequested` is prevented), so the window must never be *destroyed* —
+  ⌘W, the red button and Window → Close all go through `hide()`
+  (`CloseRequested` → `prevent_close`), and `RunEvent::Reopen` (dock click)
+  shows it again. A destroyed window here = a running app with nothing to
+  show (the "window vanished" bug). Two fail-safes keep a hidden window from
+  sticking: a 5s watchdog in `setup` shows it if the frontend never did, and
+  `main().catch` shows it with the error. `IM_SCENARIO=close` exercises the
+  close path.
 - `transparent: true` + `macOSPrivateApi: true` are required for the vibrancy
   to show; `titleBarStyle: Overlay` + `hiddenTitle` give a chromeless window
   whose traffic lights sit near `trafficLightPosition` — tao only resizes the

@@ -19,6 +19,7 @@
     "clipboard-manager:allow-write-text",
     "updater:default",
     "process:default",
-    "core:app:allow-version"
+    "core:app:allow-version",
+    "core:window:allow-close"
   ]
 }

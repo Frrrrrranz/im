@@ -1,7 +1,7 @@
 // In-window settings, laid out like System Settings: grouped lists with a
 // label on the left and the control on the right. Every field saves itself
-// when you leave it — there is no Save button. Providers are groups; a new one
-// comes from the native "Add Provider" menu and is edited in place.
+// when you leave it — there is no Save button. "Add Provider" opens an empty
+// card; it becomes a real provider the moment it has a name.
 
 import type { Backend } from "../api";
 import * as actions from "../actions";
@@ -14,6 +14,7 @@ export function createSettings(backend: Backend): HTMLElement {
   const providersList = h("div", { class: "groups" });
   const general = h("div", { class: "group" });
   const data = h("div", { class: "group" });
+  const addRow = h("button", { class: "add-row", onclick: () => addDraft() }, h("span", { class: "add-plus" }, "+"), "Add Provider");
 
   const root = h(
     "div",
@@ -21,24 +22,15 @@ export function createSettings(backend: Backend): HTMLElement {
     h(
       "div",
       { class: "settings-scroll" },
-      h(
-        "div",
-        { class: "settings-column" },
-        h("h1", null, "Settings"),
-        section("Providers", "Anything that speaks Chat Completions, Anthropic Messages or Responses. Keys never leave this Mac."),
-        providersList,
-        h("button", { class: "add-row", onclick: () => actions.chooseProviderPreset() }, h("span", { class: "add-plus" }, "+"), "Add Provider"),
-        section("General"),
-        general,
-        section("Data"),
-        data,
-      ),
+      h("div", { class: "settings-column" }, h("h1", null, "Settings"), section("Providers"), providersList, addRow, section("General"), general, section("Data"), data),
     ),
   );
 
-  // Provider groups are keyed by id and updated in place, so saving one field
-  // never rebuilds (and un-focuses) the card you are typing in.
+  // Cards are keyed by provider id and updated in place, so saving one field
+  // never rebuilds (and un-focuses) the card being typed in. A draft card has
+  // no id yet; it registers itself once the first save gives it one.
   const cards = new Map<string, ProviderCard>();
+  let draft: ProviderCard | null = null;
   const renderProviders = (providers: ProviderView[]) => {
     const seen = new Set<string>();
     const els: HTMLElement[] = [];
@@ -46,7 +38,7 @@ export function createSettings(backend: Backend): HTMLElement {
       seen.add(p.id);
       let card = cards.get(p.id);
       if (!card) {
-        card = providerCard(p, backend);
+        card = providerCard(p, backend, hooks);
         cards.set(p.id, card);
       } else {
         card.update(p);
@@ -54,7 +46,31 @@ export function createSettings(backend: Backend): HTMLElement {
       els.push(card.el);
     }
     for (const id of [...cards.keys()]) if (!seen.has(id)) cards.delete(id);
-    replaceChildren(providersList, els.length ? els : [h("div", { class: "group-empty" }, "No providers yet — add one below.")]);
+    if (draft) els.push(draft.el);
+    replaceChildren(providersList, els.length ? els : [h("div", { class: "group-empty" }, "No providers yet.")]);
+  };
+  const hooks: CardHooks = {
+    created(id, card) {
+      cards.set(id, card);
+      if (draft === card) draft = null;
+    },
+    discard(card) {
+      if (draft === card) {
+        draft = null;
+        card.el.remove();
+        if (cards.size === 0) renderProviders(store.state.providers);
+      }
+    },
+  };
+  const addDraft = () => {
+    if (draft) {
+      draft.focus();
+      return;
+    }
+    draft = providerCard({ id: "", name: "", protocol: "chat", base_url: "", models: [], has_key: false }, backend, hooks);
+    providersList.querySelector(".group-empty")?.remove();
+    providersList.append(draft.el);
+    draft.focus();
   };
 
   // "Version 0.1.0 · Check for Updates" → "0.2.0 available · Update" → "Downloading… 42%".
@@ -65,7 +81,12 @@ export function createSettings(backend: Backend): HTMLElement {
     if (u && (u.phase === "downloading" || u.phase === "installing")) {
       control = h("span", { class: "srow-value" }, u.phase === "installing" ? "Installing…" : `Downloading… ${Math.round((u.progress ?? 0) * 100)}%`);
     } else if (u) {
-      control = h("div", { class: "srow-inline" }, h("span", { class: `srow-value${u.phase === "failed" ? " err" : ""}`, title: u.error ?? u.notes ?? "" }, u.phase === "failed" ? "Update failed" : `${u.version} available`), tbtn(u.phase === "failed" ? "Retry" : "Update", () => void actions.installUpdate()));
+      control = h(
+        "div",
+        { class: "srow-inline" },
+        h("span", { class: `srow-value${u.phase === "failed" ? " err" : ""}`, title: u.error ?? u.notes ?? "" }, u.phase === "failed" ? "Update failed" : `${u.version} available`),
+        tbtn(u.phase === "failed" ? "Retry" : "Update", () => void actions.installUpdate()),
+      );
     } else if (s.updateCheck === "checking") {
       control = h("span", { class: "srow-value" }, "Checking…");
     } else if (s.updateCheck === "uptodate") {
@@ -92,22 +113,10 @@ export function createSettings(backend: Backend): HTMLElement {
         ),
       ),
     );
-    const maxTokens = h("input", { class: "sfield num", type: "number", min: 1, step: 1, value: String(settings.max_tokens) }) as HTMLInputElement;
-    maxTokens.addEventListener("change", () => {
-      const n = Math.max(1, Math.floor(Number(maxTokens.value) || 8192));
-      maxTokens.value = String(n);
-      void actions.saveSettings({ ...store.state.settings, max_tokens: n });
-    });
     const prompt = h("textarea", { class: "sfield area", rows: 3, placeholder: "Copied into every new chat as its system prompt.", value: settings.system_prompt ?? "" }) as HTMLTextAreaElement;
     prompt.addEventListener("change", () => void actions.saveSettings({ ...store.state.settings, system_prompt: prompt.value.trim() || undefined }));
     versionEl = versionRow();
-    replaceChildren(
-      general,
-      versionEl,
-      srow("Appearance", seg),
-      srow("Max output tokens", maxTokens, "Sent where the protocol needs one (Anthropic)."),
-      srow("System prompt", null, undefined, prompt),
-    );
+    replaceChildren(general, versionEl, srow("Appearance", seg), srow("System prompt", null, undefined, prompt));
   };
 
   const renderData = async () => {
@@ -140,18 +149,13 @@ export function createSettings(backend: Backend): HTMLElement {
         versionEl = next;
       }
     }
-    if (open && s.focusProvider) {
-      const id = s.focusProvider;
-      store.state.focusProvider = null;
-      requestAnimationFrame(() => cards.get(id)?.focus());
-    }
     wasOpen = open;
   });
   return root;
 }
 
-function section(title: string, note?: string): HTMLElement {
-  return h("div", { class: "section" }, h("h2", null, title), note ? h("p", { class: "section-note" }, note) : null);
+function section(title: string): HTMLElement {
+  return h("div", { class: "section" }, h("h2", null, title));
 }
 
 /** One list row: label · control (right); optional note under the label and a
@@ -176,8 +180,34 @@ interface ProviderCard {
   focus(): void;
 }
 
-function providerCard(initial: ProviderView, backend: Backend): ProviderCard {
+interface CardHooks {
+  created(id: string, card: ProviderCard): void;
+  discard(card: ProviderCard): void;
+}
+
+/** `a-z0-9-` from a name, or the URL's host; unique among the current providers. */
+function idFor(name: string, baseUrl: string): string {
+  let base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!base) {
+    try {
+      base = new URL(baseUrl).hostname.split(".").slice(-2, -1)[0] ?? "";
+    } catch {
+      base = "";
+    }
+  }
+  base = base || "provider";
+  const taken = new Set(store.state.providers.map((p) => p.id));
+  let id = base;
+  for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
+  return id;
+}
+
+function providerCard(initial: ProviderView, backend: Backend, hooks: CardHooks): ProviderCard {
   let p = initial;
+  const isDraft = () => p.id === "";
   const name = h("input", { class: "sfield name", value: p.name, placeholder: "Name", spellcheck: false }) as HTMLInputElement;
   const id = h("div", { class: "provider-id" }, p.id);
   const protocol = h("select", { class: "popup" }, PROTOCOLS.map((x) => h("option", { value: x.value, selected: x.value === p.protocol }, x.label))) as HTMLSelectElement;
@@ -199,17 +229,33 @@ function providerCard(initial: ProviderView, backend: Backend): ProviderCard {
     endpoint.textContent = baseUrl.value.trim() ? `${baseUrl.value.trim().replace(/\/+$/, "")}${proto.path}` : "";
   };
 
+  // A draft becomes real on its first save; until it has a name (or a URL to
+  // name it after) nothing is written.
   const save = async (apiKey?: string) => {
+    if (isDraft() && !name.value.trim() && !baseUrl.value.trim()) return;
+    const creating = isDraft();
+    const pid = creating ? idFor(name.value.trim(), baseUrl.value.trim()) : p.id;
     try {
       const providers = await backend.saveProvider({
-        id: p.id,
-        name: name.value.trim() || p.id,
+        id: pid,
+        name: name.value.trim() || pid,
         protocol: protocol.value as Protocol,
         base_url: baseUrl.value.trim(),
         models: modelList(),
         api_key: apiKey,
       });
+      if (creating) {
+        p = providers.find((x) => x.id === pid) ?? { ...p, id: pid };
+        id.textContent = pid;
+        el.classList.remove("draft");
+        footBtn.textContent = "Remove Provider…";
+        hooks.created(pid, card);
+      }
       store.set({ providers });
+      if (creating && !store.state.draft) {
+        const first = providers.find((x) => x.id === pid);
+        if (first) store.set({ draft: { providerId: first.id, model: first.models[0] ?? "" } });
+      }
     } catch (e) {
       say(String(e), true);
     }
@@ -219,7 +265,7 @@ function providerCard(initial: ProviderView, backend: Backend): ProviderCard {
     fetchBtn.disabled = true;
     say("Fetching…");
     try {
-      const ids = await backend.fetchModels(protocol.value as Protocol, baseUrl.value.trim(), key.value.trim() || undefined, p.id);
+      const ids = await backend.fetchModels(protocol.value as Protocol, baseUrl.value.trim(), key.value.trim() || undefined, isDraft() ? undefined : p.id);
       if (ids.length) {
         models.value = ids.join("\n");
         models.rows = rowsFor(ids.length);
@@ -249,6 +295,10 @@ function providerCard(initial: ProviderView, backend: Backend): ProviderCard {
   paintCount();
 
   const remove = async () => {
+    if (isDraft()) {
+      hooks.discard(card);
+      return;
+    }
     const ok = await backend.confirm(`Remove “${p.name}”? Its API key is deleted too; chats are kept.`, "Remove Provider", "Remove");
     if (!ok) return;
     const providers = await backend.deleteProvider(p.id);
@@ -256,17 +306,18 @@ function providerCard(initial: ProviderView, backend: Backend): ProviderCard {
     store.set({ providers, draft });
   };
 
+  const footBtn = tbtn(isDraft() ? "Discard" : "Remove Provider…", () => void remove(), true);
   const el = h(
     "div",
-    { class: "group provider" },
+    { class: `group provider${isDraft() ? " draft" : ""}` },
     h("div", { class: "srow provider-head" }, h("div", { class: "srow-label" }, name, id), h("div", { class: "srow-control" }, protocol)),
     h("div", { class: "srow" }, h("div", { class: "srow-label" }, "Base URL"), h("div", { class: "srow-control stack" }, baseUrl, endpoint)),
     srow("API key", key),
     h("div", { class: "srow has-block" }, h("div", { class: "srow-label" }, "Models"), h("div", { class: "srow-control srow-inline" }, count, fetchBtn), h("div", { class: "srow-block" }, models)),
-    h("div", { class: "srow provider-foot" }, tbtn("Remove Provider…", () => void remove(), true)),
+    h("div", { class: "srow provider-foot" }, footBtn),
   );
 
-  return {
+  const card: ProviderCard = {
     el,
     update(next) {
       p = next;
@@ -278,14 +329,16 @@ function providerCard(initial: ProviderView, backend: Backend): ProviderCard {
         models.rows = rowsFor(next.models.length);
       }
       key.placeholder = next.has_key ? "••••••••" : "Not set";
+      id.textContent = next.id;
       paintEndpoint();
       paintCount();
     },
     focus() {
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      (baseUrl.value ? key : baseUrl).focus();
+      (isDraft() ? name : baseUrl.value ? key : baseUrl).focus();
     },
   };
+  return card;
 }
 
 function rowsFor(n: number): number {

@@ -7,7 +7,9 @@ import { h } from "../dom";
 interface Options {
   /** CSS variable the column reads its width from, e.g. `--sidebar-w`. */
   varName: string;
-  setting: "sidebar" | "inspector";
+  setting: "sidebar" | "inspector" | "column";
+  /** Pixels of width per pixel of drag; 2 for a centred column whose two edges move together. */
+  factor?: number;
   /** Which edge of the column the handle sits on. */
   edge: "left" | "right";
   min: number;
@@ -30,7 +32,7 @@ export function createResizer(opts: Options): HTMLElement {
     document.body.classList.add("resizing");
     const move = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
-      w = Math.round(Math.min(opts.max(), Math.max(opts.min, startW + (opts.edge === "right" ? dx : -dx))));
+      w = Math.round(Math.min(opts.max(), Math.max(opts.min, startW + (opts.edge === "right" ? dx : -dx) * (opts.factor ?? 1))));
       root.style.setProperty(opts.varName, `${w}px`);
     };
     const up = () => {
@@ -55,10 +57,14 @@ export function columnWidth(varName: string, fallback: number): number {
 }
 
 /** Push saved widths into the stylesheet variables (absent = default). */
-export function applyColumnWidths(sidebar: number | undefined, inspector: number | undefined) {
+export function applyColumnWidths(sidebar: number | undefined, inspector: number | undefined, column: number | undefined) {
   const root = document.documentElement.style;
-  if (sidebar) root.setProperty("--sidebar-w", `${sidebar}px`);
-  else root.removeProperty("--sidebar-w");
-  if (inspector) root.setProperty("--inspector-w", `${inspector}px`);
-  else root.removeProperty("--inspector-w");
+  for (const [name, value] of [
+    ["--sidebar-w", sidebar],
+    ["--inspector-w", inspector],
+    ["--column-w", column],
+  ] as const) {
+    if (value) root.setProperty(name, `${value}px`);
+    else root.removeProperty(name);
+  }
 }

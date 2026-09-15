@@ -59,18 +59,27 @@ class FrameStack {
     const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
     const done = () => {
       frame.removeEventListener("load", done);
-      this.frames[this.front]!.classList.remove("show");
-      frame.classList.add("show");
-      if (this.urls[back]) URL.revokeObjectURL(this.urls[back]!);
-      this.urls[back] = url;
-      this.front = back;
-      this.shown = html;
-      this.lastSwap = performance.now();
-      this.onSwap?.(html);
-      setTimeout(() => {
-        this.busy = false;
-        this.flush();
-      }, SWAP_MS);
+      // `load` fires before the new document has painted; give it two frames,
+      // then fade it in *over* the old one — the old frame stays opaque until
+      // it is fully covered, so no white ever shows through the cross-fade.
+      const old = this.frames[this.front]!;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          old.classList.remove("top");
+          frame.classList.add("top", "show");
+          if (this.urls[back]) URL.revokeObjectURL(this.urls[back]!);
+          this.urls[back] = url;
+          this.front = back;
+          this.shown = html;
+          this.lastSwap = performance.now();
+          this.onSwap?.(html);
+          setTimeout(() => {
+            old.classList.remove("show");
+            this.busy = false;
+            this.flush();
+          }, SWAP_MS);
+        }),
+      );
     };
     frame.addEventListener("load", done);
     frame.src = url;

@@ -32,7 +32,7 @@
   --btn-gap: 0px;
   --lights-end: 76px; /* right edge of the green light: x = 16, three 14px dots on a 23px pitch (macOS 26) */
   --controls-left: calc(var(--lights-end) + 4px);
-  --controls-w: calc(2 * var(--btn-w) + var(--btn-gap)); /* sidebar toggle + settings */
+  --controls-w: var(--btn-w); /* just the sidebar toggle */
   --topbar-left: 10px; /* same inset as the sidebar rows */
   --dur: 240ms;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -238,15 +238,22 @@ body.no-sidebar .sidebar-inner {
   padding: 0 10px 8px;
   scrollbar-width: thin;
 }
-/* Sidebar foot, present only while an update is waiting: dot · "0.2.0 available" · Update */
-.update-row {
+/* Sidebar foot: the gear in the corner; the update line only while one is waiting. */
+.sidebar-foot {
   flex: none;
   display: flex;
   align-items: center;
+  gap: 4px;
+  padding: 0 11px 10px;
+}
+.update-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 8px;
-  margin: 0 10px 10px;
   padding: 0 8px;
-  height: 30px;
+  height: 26px;
   border-radius: 6px;
   font-size: var(--small);
   color: var(--accent);
@@ -578,10 +585,43 @@ body.no-sidebar .main {
 }
 
 .chat {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: clip; /* column handles that fall outside a narrow window are simply gone */
+}
+/* Drag handles on the reading column's edges (only reachable when the window
+   is wider than the column); a faint line appears under the pointer. */
+.resizer.column-handle {
+  top: 0; /* .chat already starts below the header strip */
+  bottom: 0;
+  z-index: 3;
+}
+.resizer.column-handle.left {
+  left: calc(50% - var(--column-w) / 2 - 5px);
+  right: auto;
+}
+.resizer.column-handle.right {
+  right: calc(50% - var(--column-w) / 2 - 5px);
+  left: auto;
+}
+.resizer.column-handle::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--separator);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.resizer.column-handle:hover::after,
+body.resizing .resizer.column-handle::after {
+  opacity: 1;
 }
 .chat[hidden] {
   display: none;
@@ -882,14 +922,15 @@ details.reasoning summary:hover {
 .code-body {
   position: relative;
 }
+.code-row {
+  display: flex;
+  align-items: stretch;
+}
 .code-scroll {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-width: 0;
   padding: 10px 12px;
   overflow-x: auto;
-}
-.code-scroll.numbered {
-  grid-template-columns: max-content minmax(0, 1fr);
 }
 .md pre.code code {
   display: block;
@@ -899,12 +940,9 @@ details.reasoning summary:hover {
   white-space: pre;
   tab-size: 4;
 }
-.code-scroll .gutter {
-  position: sticky; /* stays put while long lines scroll */
-  left: 0;
-  margin: 0 12px 0 -12px;
-  padding: 0 10px 0 12px;
-  background: var(--code-bg);
+.code-row .gutter {
+  flex: none;
+  padding: 10px 0 10px 12px;
   font-size: 12.5px;
   text-align: right;
   color: var(--tertiary);
@@ -952,6 +990,11 @@ details.reasoning summary:hover {
 }
 .pane-frame.show {
   opacity: 1;
+}
+/* The newest frame is stacked on top while it fades in; the previous one is
+   still `.show` (opaque) underneath until the swap finishes. */
+.pane-frame.top {
+  z-index: 1;
 }
 .pane.interactive .pane-frame.show {
   pointer-events: auto;
@@ -1324,10 +1367,8 @@ pre.code:hover .code-bar {
   font-weight: 600;
   margin: 0;
 }
-.section-note {
-  margin: 3px 0 0;
-  font-size: var(--small);
-  color: var(--secondary);
+.group.draft {
+  border-color: var(--accent);
 }
 .groups {
   display: flex;

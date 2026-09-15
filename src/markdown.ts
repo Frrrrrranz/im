@@ -27,22 +27,29 @@ export function renderMarkdown(text: string): DocumentFragment {
   return clean;
 }
 
-/** A code block is `pre.code > .code-body > (.code-bar, .code-scroll > (.gutter?, code))`.
- *  The bar (language + Copy) is chrome; the scroll box carries the horizontal
- *  overflow so the block itself can hold a sticky preview above the code. HTML
- *  blocks are tagged `html`; the transcript attaches the live preview pane. */
+/** A code block is `pre.code > (.code-preview?) .code-body > (.code-bar, .code-row > (.gutter?, .code-scroll > code))`.
+ *  The gutter is a real column; only `.code-scroll` scrolls horizontally, so
+ *  long lines move beside the numbers, never under them. `html` and `svg`
+ *  blocks are tagged `html` (+ `data-kind`); the transcript attaches the live
+ *  preview pane. */
 function decorateCode(root: ParentNode) {
   root.querySelectorAll("pre").forEach((pre) => {
     const code = pre.querySelector("code");
     if (!code) return;
-    const lang = [...code.classList].find((c) => c.startsWith("language-"))?.slice(9) ?? "";
+    const lang = ([...code.classList].find((c) => c.startsWith("language-"))?.slice(9) ?? "").toLowerCase();
     pre.classList.add("code");
-    if (lang.toLowerCase() === "html") pre.classList.add("html");
+    if (lang === "html" || lang === "svg") {
+      pre.classList.add("html");
+      pre.dataset.kind = lang;
+    }
 
     const scroll = document.createElement("div");
     scroll.className = "code-scroll";
     scroll.append(code);
-    setGutter(scroll, code.textContent ?? "");
+    const row = document.createElement("div");
+    row.className = "code-row";
+    row.append(scroll);
+    setGutter(row, code.textContent ?? "");
 
     const bar = document.createElement("div");
     bar.className = "code-bar";
@@ -58,26 +65,24 @@ function decorateCode(root: ParentNode) {
 
     const body = document.createElement("div");
     body.className = "code-body";
-    body.append(bar, scroll);
+    body.append(bar, row);
     pre.append(body);
   });
 }
 
 /** Line numbers for blocks of two lines or more; kept in step with the code while it streams. */
-export function setGutter(scroll: HTMLElement, text: string) {
+export function setGutter(row: HTMLElement, text: string) {
   const lines = text.replace(/\n$/, "").split("\n").length;
-  let gutter = scroll.querySelector(":scope > .gutter") as HTMLElement | null;
+  let gutter = row.querySelector(":scope > .gutter") as HTMLElement | null;
   if (lines < 2) {
     gutter?.remove();
-    scroll.classList.remove("numbered");
     return;
   }
   if (!gutter) {
     gutter = document.createElement("span");
     gutter.className = "gutter";
     gutter.setAttribute("aria-hidden", "true");
-    scroll.prepend(gutter);
-    scroll.classList.add("numbered");
+    row.prepend(gutter);
   }
   const want = Array.from({ length: lines }, (_, i) => String(i + 1)).join("\n");
   if (gutter.textContent !== want) gutter.textContent = want;
@@ -102,7 +107,7 @@ export function patchMarkdown(body: HTMLElement, next: DocumentFragment) {
       const to = a.querySelector("code")!;
       if (to.textContent !== from.textContent) {
         to.textContent = from.textContent;
-        setGutter(a.querySelector(".code-scroll")!, from.textContent ?? "");
+        setGutter(a.querySelector(".code-row")!, from.textContent ?? "");
       }
       continue;
     }

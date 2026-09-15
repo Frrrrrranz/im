@@ -2,7 +2,6 @@
 // these, so behaviour is defined once.
 
 import type { Backend } from "./api";
-import { PRESETS } from "./presets";
 import { store } from "./state";
 import type { Appearance, ContextItem, Session, TurnKind } from "./types";
 
@@ -97,8 +96,8 @@ export function toggleInspector() {
 }
 
 /** Column widths are written on mouse-up, not per frame. `undefined` restores the default. */
-export function setColumnWidth(column: "sidebar" | "inspector", width: number | undefined) {
-  const key = column === "sidebar" ? "sidebar_width" : "inspector_width";
+export function setColumnWidth(column: "sidebar" | "inspector" | "column", width: number | undefined) {
+  const key = column === "sidebar" ? "sidebar_width" : column === "inspector" ? "inspector_width" : "column_width";
   const settings = { ...store.state.settings };
   if (width === undefined) delete settings[key];
   else settings[key] = width;
@@ -335,29 +334,6 @@ export async function saveSettings(settings: typeof store.state.settings) {
   await backend.saveSettings(settings);
 }
 
-/** Pick a preset from the native menu; the provider exists at once and is edited in place. */
-export function chooseProviderPreset() {
-  popupMenu(PRESETS.map((p) => ({ id: `ctx:add_provider:${p.id}`, label: p.hint ? `${p.name} — ${p.hint}` : p.name })));
-}
-
-export async function addProvider(presetId: string) {
-  const preset = PRESETS.find((p) => p.id === presetId);
-  if (!preset) return;
-  const taken = new Set(store.state.providers.map((p) => p.id));
-  let id = preset.id;
-  for (let i = 2; taken.has(id); i++) id = `${preset.id}-${i}`;
-  try {
-    const providers = await backend.saveProvider({ id, name: preset.name, protocol: preset.protocol, base_url: preset.base_url, models: [...preset.models] });
-    store.set({ providers, focusProvider: id, view: "settings" });
-    if (!store.state.draft) {
-      const first = providers[0];
-      if (first) store.set({ draft: { providerId: first.id, model: first.models[0] ?? "" } });
-    }
-  } catch (e) {
-    store.set({ errors: { ...store.state.errors, draft: String(e) } });
-  }
-}
-
 export async function setAppearance(a: Appearance) {
   await saveSettings({ ...store.state.settings, appearance: a });
 }
@@ -493,9 +469,6 @@ function handleContext(id: string) {
       break;
     case "export_session":
       void exportCurrent();
-      break;
-    case "add_provider":
-      void addProvider(arg);
       break;
   }
 }

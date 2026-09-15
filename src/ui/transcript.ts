@@ -41,7 +41,9 @@ export function createTranscript(): Transcript {
   const atBottom = () => root.scrollHeight - root.scrollTop - root.clientHeight < 2;
   const paintJump = () => jump.classList.toggle("show", !follow && root.scrollHeight - root.clientHeight > 40);
   root.addEventListener("scroll", () => {
-    if (root.scrollTop < lastTop - 1) follow = false;
+    // Up *and* away from the bottom = the user; content shrinking clamps
+    // scrollTop down too, but leaves us at the bottom.
+    if (root.scrollTop < lastTop - 1 && !atBottom()) follow = false;
     else if (atBottom()) follow = true;
     lastTop = root.scrollTop;
     paintJump();
@@ -247,9 +249,17 @@ function renderMessage(m: Message, index: number, isLast: boolean, streaming: bo
   return el;
 }
 
-/** Every ```html block gets (or refreshes) its live preview pane. */
+/** Every ```html / ```svg block gets (or refreshes) its live preview pane. */
 function attachPreviews(body: HTMLElement) {
-  body.querySelectorAll<HTMLElement>("pre.code.html").forEach((pre) => attachPreview(pre, pre.querySelector("code")?.textContent ?? ""));
+  body.querySelectorAll<HTMLElement>("pre.code.html").forEach((pre) => {
+    const src = pre.querySelector("code")?.textContent ?? "";
+    attachPreview(pre, pre.dataset.kind === "svg" ? svgPage(src) : src);
+  });
+}
+
+/** An SVG shown the way a browser tab would: centred on white, scaled to fit. */
+function svgPage(svg: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#fff}body{display:grid;place-items:center;padding:24px;box-sizing:border-box}svg{max-width:100%;max-height:100%}</style></head><body>${svg}</body></html>`;
 }
 
 function reasoningBlock(title: string, text: string, open: boolean): HTMLDetailsElement {

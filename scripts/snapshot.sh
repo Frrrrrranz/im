@@ -28,4 +28,5 @@ shot scrolled-light  "$base?state=scrolled&theme=light"
 shot html-light      "$base?state=html&theme=light"
 shot html-expanded-dark "$base?state=html-expanded&theme=dark"
 shot streaming-html  "$base?state=streaming-html&theme=light"
+shot svg-light       "$base?state=svg&theme=light"
 shot settings-dark   "$base?state=settings&theme=dark" 1100x1500

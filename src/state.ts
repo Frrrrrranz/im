@@ -25,8 +25,6 @@ export interface State {
   editing: boolean;
   pickerOpen: boolean;
   renamingId: string | null;
-  /** A provider just added from the menu; Settings scrolls to it and focuses its first empty field. */
-  focusProvider: string | null;
   /** This build's version and, when the release feed has a newer one, that update. */
   version: string;
   update: UpdateState | null;
@@ -52,7 +50,6 @@ class Store {
     editing: false,
     pickerOpen: false,
     renamingId: null,
-    focusProvider: null,
     version: "",
     update: null,
     updateCheck: "idle",

@@ -258,6 +258,32 @@ pub fn run() {
                     }
                 }
                 let _ = window.set_theme(menu::theme_for(settings.appearance));
+
+                // The red button and Window → Close hide the window instead of
+                // destroying it: a destroyed window plus a still-running app
+                // (ExitRequested is prevented below) is an app with no window
+                // that the dock click can't bring back.
+                #[cfg(target_os = "macos")]
+                {
+                    let w = window.clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                            let _ = w.hide();
+                        }
+                    });
+                }
+
+                // The frontend shows the window once it has rendered; if it never
+                // does (a startup exception), show it anyway so the failure is visible.
+                let w = window.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    if !w.is_visible().unwrap_or(true) {
+                        log::warn!("frontend did not show the window within 5s; showing it");
+                        let _ = w.show();
+                    }
+                });
             }
             #[cfg(all(debug_assertions, target_os = "macos"))]
             snapshot::install(app.handle());
