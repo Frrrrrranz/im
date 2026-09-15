@@ -1,7 +1,9 @@
 # im — working notes for agents
 
 Tauri 2 app (Rust backend, vanilla TypeScript + Vite frontend), macOS first.
-README.md has the user-facing docs and the on-disk schema.
+README.md is the front door and stays a few lines — the user wants it to read
+like the landing page. docs/DEVELOPMENT.md has the build/usage docs, the
+on-disk schema, the protocol table and the release procedure.
 
 ## Build & verify
 
