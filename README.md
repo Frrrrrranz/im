@@ -30,7 +30,7 @@ npm run tauri build          # release .app + .dmg in src-tauri/target/release/b
 ### Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/yetlinghao/im/main/install.sh | sh
+curl -fsSL https://im.linghaoz.com/install.sh | sh
 ```
 
 That downloads the latest release, verifies its checksum and puts `im.app` in
@@ -44,6 +44,10 @@ launch and puts a dot on the gear when there is one; **Settings → Version →
 Update** (or **im → Check for Updates…**) downloads, installs and relaunches.
 
 ### Releasing
+
+[im.linghaoz.com](https://im.linghaoz.com) is `site/` published by
+`.github/workflows/pages.yml` (GitHub Pages, custom domain); it also serves
+`install.sh`.
 
 A tag is a release. `.github/workflows/release.yml` builds a universal macOS
 app, signs the updater archive with the project's key, and publishes the

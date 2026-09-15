@@ -18,8 +18,12 @@ npm run tauri build                           # release .app + .dmg (ad-hoc sign
 git tag vX.Y.Z && git push origin vX.Y.Z      # GitHub Actions builds, signs the updater archive and publishes the Release
 ```
 
-Releases live at github.com/yetlinghao/im. `install.sh` (repo root, served raw)
-is the primary install path: no quarantine flag → no Gatekeeper. The updater
+Releases live at github.com/yetlinghao/im; the landing page is `site/` →
+GitHub Pages at im.linghaoz.com (`.github/workflows/pages.yml`, custom domain set
+via the Pages API; DNS is a CNAME to yetlinghao.github.io). `install.sh` (repo
+root, copied into the site at deploy) is the primary install path: no
+quarantine flag → no Gatekeeper. The page is deliberately just icon, slogan,
+one line, the command, a dmg link — the user vetoed screenshots. The updater
 (`tauri-plugin-updater`) polls `releases/latest/download/latest.json`; its
 public key is in `tauri.conf.json`, the private key is `~/.tauri/im.key` on
 the user's Mac and the `TAURI_SIGNING_PRIVATE_KEY` repo secret — never in the

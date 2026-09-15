@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs im — https://github.com/yetlinghao/im — into /Applications.
 #
-#   curl -fsSL https://raw.githubusercontent.com/yetlinghao/im/main/install.sh | sh
+#   curl -fsSL https://im.linghaoz.com/install.sh | sh
 #
 # curl and tar don't set macOS's quarantine flag, so the app opens without the
 # "unidentified developer" stop. Integrity is checked against the sha256 that
