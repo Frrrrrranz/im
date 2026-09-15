@@ -45,6 +45,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # tauri-action uploads the archive as im_universal.app.tar.gz; name the checksum to match.
           cd src-tauri/target/universal-apple-darwin/release/bundle/macos
-          shasum -a 256 im.app.tar.gz > im.app.tar.gz.sha256
-          gh release upload "${{ github.ref_name }}" im.app.tar.gz.sha256 --clobber
+          cp im.app.tar.gz im_universal.app.tar.gz
+          shasum -a 256 im_universal.app.tar.gz > im_universal.app.tar.gz.sha256
+          gh release upload "${{ github.ref_name }}" im_universal.app.tar.gz.sha256 --clobber

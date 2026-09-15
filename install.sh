@@ -15,9 +15,10 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 echo "Downloading im…"
-curl -fsSL "$base/im.app.tar.gz" -o "$tmp/im.app.tar.gz"
-if curl -fsSL "$base/im.app.tar.gz.sha256" -o "$tmp/im.app.tar.gz.sha256"; then
-  (cd "$tmp" && shasum -a 256 -c im.app.tar.gz.sha256 >/dev/null) || {
+archive=im_universal.app.tar.gz
+curl -fsSL "$base/$archive" -o "$tmp/$archive"
+if curl -fsSL "$base/$archive.sha256" -o "$tmp/$archive.sha256"; then
+  (cd "$tmp" && shasum -a 256 -c "$archive.sha256" >/dev/null) || {
     echo "im: checksum mismatch, not installing" >&2
     exit 1
   }
@@ -28,7 +29,7 @@ dest=${IM_DEST:-/Applications}
 mkdir -p "$dest"
 osascript -e 'quit app "im"' >/dev/null 2>&1 || true
 rm -rf "$dest/im.app"
-tar -xzf "$tmp/im.app.tar.gz" -C "$dest"
+tar -xzf "$tmp/$archive" -C "$dest"
 xattr -dr com.apple.quarantine "$dest/im.app" 2>/dev/null || true
 
 echo "Installed $dest/im.app"
