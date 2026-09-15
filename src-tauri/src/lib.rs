@@ -197,8 +197,20 @@ fn popup_menu(window: tauri::Window, items: Vec<menu::ContextItem>) -> Cmd<()> {
     menu::popup(window, items).map_err(err)
 }
 
-/// Debug builds only: `IM_SCENARIO` / `IM_AUTOSEND` let scripts drive the UI
-/// (see scripts/app-snapshot.sh). Always empty in release.
+/// The bytes of a dropped or chosen file, as an ArrayBuffer. The frontend
+/// decodes, downsizes and encodes them itself; this only gates the size.
+#[tauri::command]
+fn read_image(path: String) -> Cmd<tauri::ipc::Response> {
+    const MAX_BYTES: u64 = 50 * 1024 * 1024;
+    let meta = std::fs::metadata(&path).map_err(err)?;
+    if meta.len() > MAX_BYTES {
+        return Err(format!("{} is too large ({} MB)", path, meta.len() / 1024 / 1024));
+    }
+    std::fs::read(&path).map(tauri::ipc::Response::new).map_err(err)
+}
+
+/// Debug builds only: `IM_SCENARIO` / `IM_AUTOSEND` / `IM_ATTACH` / `IM_QUERY` let scripts
+/// drive the UI (see scripts/app-snapshot.sh). Always empty in release.
 #[tauri::command]
 fn debug_scenario() -> serde_json::Value {
     #[cfg(debug_assertions)]
@@ -206,6 +218,9 @@ fn debug_scenario() -> serde_json::Value {
         serde_json::json!({
             "state": std::env::var("IM_SCENARIO").ok(),
             "autosend": std::env::var("IM_AUTOSEND").ok(),
+            "attach": std::env::var("IM_ATTACH").ok(),
+            // Scenario switches, URL-query style (`click=1200&close=1500&frames=1`); the browser reads location.search.
+            "query": std::env::var("IM_QUERY").ok(),
         })
     }
     #[cfg(not(debug_assertions))]
@@ -309,6 +324,7 @@ pub fn run() {
             export_jsonl,
             export_session,
             popup_menu,
+            read_image,
             log_message,
             debug_scenario,
         ])

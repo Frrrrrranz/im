@@ -79,10 +79,90 @@ impl Default for Protocol {
     }
 }
 
+/// One piece of a multimodal message, in the Chat Completions wire shape so a
+/// stored trajectory replays as-is: `{type: "text", text}` or
+/// `{type: "image_url", image_url: {url}}` (a `data:` URL — sessions stay
+/// self-contained).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Part {
+    Text { text: String },
+    ImageUrl { image_url: ImageUrl },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImageUrl {
+    pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// Message content: a plain string, or parts when there are images.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Content {
+    Text(String),
+    Parts(Vec<Part>),
+}
+
+impl Content {
+    /// Text plus data-URL images; collapses to a plain string when there are none.
+    pub fn with_images(text: String, images: Vec<String>) -> Content {
+        if images.is_empty() {
+            return Content::Text(text);
+        }
+        let mut parts = Vec::with_capacity(images.len() + 1);
+        if !text.is_empty() {
+            parts.push(Part::Text { text });
+        }
+        parts.extend(images.into_iter().map(|url| Part::ImageUrl { image_url: ImageUrl { url, detail: None } }));
+        Content::Parts(parts)
+    }
+
+    /// The text of the message (image parts contribute nothing).
+    pub fn text(&self) -> String {
+        match self {
+            Content::Text(t) => t.clone(),
+            Content::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    Part::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        }
+    }
+
+    pub fn images(&self) -> Vec<&str> {
+        match self {
+            Content::Text(_) => Vec::new(),
+            Content::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    Part::ImageUrl { image_url } => Some(image_url.url.as_str()),
+                    _ => None,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<String> for Content {
+    fn from(s: String) -> Self {
+        Content::Text(s)
+    }
+}
+impl From<&str> for Content {
+    fn from(s: &str) -> Self {
+        Content::Text(s.to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub role: Role,
-    pub content: String,
+    pub content: Content,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<String>,
     /// Model reasoning captured from the stream, if the provider sent any.
@@ -94,7 +174,7 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn user(content: impl Into<String>, now: String) -> Self {
+    pub fn user(content: impl Into<Content>, now: String) -> Self {
         Message {
             role: Role::User,
             content: content.into(),
@@ -239,6 +319,20 @@ pub struct ProviderView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn content_is_a_string_until_there_are_images() {
+        let plain = Content::with_images("hi".into(), vec![]);
+        assert_eq!(serde_json::to_string(&plain).unwrap(), r#""hi""#);
+        let rich = Content::with_images("look".into(), vec!["data:image/png;base64,AAAA".into()]);
+        let json = serde_json::to_string(&rich).unwrap();
+        assert!(json.starts_with(r#"[{"type":"text","text":"look"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}]"#));
+        let back: Content = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.text(), "look");
+        assert_eq!(back.images(), vec!["data:image/png;base64,AAAA"]);
+        let legacy: Message = serde_json::from_str(r#"{"role":"user","content":"plain"}"#).unwrap();
+        assert_eq!(legacy.content, Content::Text("plain".into()));
+    }
 
     #[test]
     fn reasoning_field_reads_old_name_and_writes_new() {

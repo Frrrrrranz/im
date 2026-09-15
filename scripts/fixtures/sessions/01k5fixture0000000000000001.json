@@ -54,6 +54,29 @@
         },
         "finish_reason": "stop"
       }
+    },
+    {
+      "role": "user",
+      "content": "帮我做一个个人作品集的首页，深色的。",
+      "created_at": "2026-09-14T12:56:00Z"
+    },
+    {
+      "role": "assistant",
+      "content": "来一个深色渐变风格的：\n\n```html\n<!doctype html>\n<html lang=\"zh\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<style>\n  * { box-sizing: border-box; margin: 0; }\n  body { min-height: 100vh; font: 16px/1.6 -apple-system, \"PingFang SC\", sans-serif; color: #e8e6f0;\n         background: radial-gradient(1200px 600px at 20% -10%, #4a3c8c 0%, transparent 60%),\n                     radial-gradient(900px 500px at 90% 10%, #2a2f6a 0%, transparent 55%), #14132a; }\n  nav { display: flex; justify-content: space-between; align-items: center; max-width: 760px; margin: 0 auto; padding: 32px 24px 20px; border-bottom: 1px solid rgba(255,255,255,.12); }\n  nav b { font-size: 20px; } nav b span { color: #a78bfa; }\n  nav a { color: #cfcbe6; text-decoration: none; margin-left: 22px; font-size: 14px; }\n  .hero { text-align: center; padding: 80px 24px 40px; }\n  .avatar { width: 112px; height: 112px; border-radius: 50%; margin: 0 auto 30px; display: grid; place-items: center; font-size: 48px;\n            background: linear-gradient(135deg, #8b7cf6, #5b4fd6); box-shadow: 0 0 0 14px rgba(139,124,246,.15), 0 20px 60px rgba(91,79,214,.5); animation: float 4s ease-in-out infinite; }\n  @keyframes float { 50% { transform: translateY(-8px); } }\n  h1 { font-size: 40px; letter-spacing: -.01em; } h1 span { color: #a78bfa; }\n  .hero p { color: #b8b4d0; margin-top: 12px; }\n  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; max-width: 760px; margin: 60px auto 0; padding: 0 24px; }\n  .card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 26px 0; text-align: center; backdrop-filter: blur(12px); }\n  .card b { display: block; font-size: 30px; color: #a78bfa; } .card small { color: #b8b4d0; }\n  h2 { max-width: 760px; margin: 60px auto 0; padding: 0 24px; border-left: 3px solid #a78bfa; padding-left: 14px; }\n  .skills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 760px; margin: 24px auto 80px; padding: 0 24px; }\n  .skills div { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 18px; }\n  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); margin-top: 12px; overflow: hidden; }\n  .bar i { display: block; height: 100%; background: linear-gradient(90deg, #a78bfa, #60a5fa); }\n</style>\n</head>\n<body>\n<nav><b>Dev<span>.Portfolio</span></b><div><a href=\"#\">首页</a><a href=\"#\">技能</a><a href=\"#\">项目</a><a href=\"#\">联系</a></div></nav>\n<section class=\"hero\">\n  <div class=\"avatar\">🧑‍💻</div>\n  <h1>你好，我是 <span>小明</span></h1>\n  <p>一名热爱创造的前端开发者，专注于构建美观、流畅的用户体验。</p>\n</section>\n<section class=\"stats\">\n  <div class=\"card\"><b>5</b><small>年经验</small></div>\n  <div class=\"card\"><b>42</b><small>完成项目</small></div>\n  <div class=\"card\"><b>18</b><small>Happy 客户</small></div>\n  <div class=\"card\"><b>3.2k</b><small>提交代码</small></div>\n</section>\n<h2>技能</h2>\n<section class=\"skills\">\n  <div>HTML / CSS<div class=\"bar\"><i style=\"width:92%\"></i></div></div>\n  <div>JavaScript<div class=\"bar\"><i style=\"width:85%\"></i></div></div>\n  <div>Vue / React<div class=\"bar\"><i style=\"width:78%\"></i></div></div>\n</section>\n</body>\n</html>\n```\n\n保存为 index.html 直接打开即可。",
+      "created_at": "2026-09-14T12:56:20Z",
+      "meta": {
+        "provider_id": "openrouter",
+        "protocol": "chat",
+        "model": "anthropic/claude-sonnet-4",
+        "created_at": "2026-09-14T12:56:20Z",
+        "latency_ms": 6100,
+        "ttft_ms": 420,
+        "usage": {
+          "input_tokens": 1700,
+          "output_tokens": 980
+        },
+        "finish_reason": "stop"
+      }
     }
   ]
 }

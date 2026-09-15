@@ -46,6 +46,7 @@ put, with a small **↓** above the composer to jump back.
 | Shortcut | Action |
 |---|---|
 | ⌘N | New chat |
+| ⌘⇧A | Attach image (or paste / drop one) |
 | ⌘K | Choose model |
 | ⌘, | Settings |
 | ⌃⌘S | Toggle sidebar |
@@ -56,6 +57,17 @@ put, with a small **↓** above the composer to jump back.
 | ⌘⇧[ / ⌘⇧] | Previous / next chat |
 | ⌘⇧E | Export chat as JSON |
 | ⌘W / red button | Hide the window (click the Dock icon to bring it back) |
+
+### Images
+
+Paste an image into the composer, drop image files onto the window, or use
+**File → Attach Image…** (⌘⇧A); they queue as thumbnails above the text until
+the message goes out. Anything macOS can decode is accepted (PNG, JPEG, GIF,
+WebP, HEIC photos, TIFF…) and normalised before sending: originals up to 2048px
+and a few MB are kept as they are, larger or exotic ones are redrawn (PNG stays
+PNG so screenshots stay sharp, the rest becomes JPEG). Click an image in the
+transcript to enlarge it. Whether a model accepts images is up to the provider;
+a text-only model answers with its own error inline.
 
 Chats are renamed by double-clicking them in the sidebar, deleted from the
 right-click menu or **File → Delete Chat**. Both side columns can be dragged
@@ -127,6 +139,12 @@ Design rules for the schema:
   `role` and `content` and you have a training trajectory. The system prompt
   is a top-level `system` field, copied into the session when it is created so
   the file is self-contained.
+- A user message with images has `content` as a list of parts in the Chat
+  Completions shape — `{"type": "text", "text": …}` and
+  `{"type": "image_url", "image_url": {"url": "data:image/png;base64,…"}}` —
+  so it replays as-is on the `chat` protocol and is translated on the wire for
+  the other two (below). Images are inlined as `data:` URLs: the file stays
+  self-contained, at the cost of size. Replies are always plain strings.
 - Everything about *how* a reply was produced hangs off that assistant
   message under `meta` — never off the session or a side table. `finish_reason`
   is the provider's own value (`stop`, `end_turn`, `length`, …) or `cancelled`
@@ -149,9 +167,9 @@ Design rules for the schema:
 
 | `protocol` | Request | Reasoning captured from | Usage from |
 |---|---|---|---|
-| `chat` | `POST {base_url}/chat/completions`, `stream: true`, `stream_options.include_usage`; earlier replies are replayed with their `reasoning_content` | `delta.reasoning_content` / `delta.reasoning` | final `usage` chunk |
-| `anthropic` | `POST {base_url}/messages`, `stream: true`, `max_tokens` (8192) | `thinking_delta` | `message_start` + `message_delta` |
-| `responses` | `POST {base_url}/responses`, `stream: true`, `store: false` | `response.reasoning_summary_text.delta` | `response.completed` |
+| `chat` | `POST {base_url}/chat/completions`, `stream: true`, `stream_options.include_usage`; earlier replies are replayed with their `reasoning_content`; image parts go through unchanged | `delta.reasoning_content` / `delta.reasoning` | final `usage` chunk |
+| `anthropic` | `POST {base_url}/messages`, `stream: true`, `max_tokens` (8192); images become `{"type": "image", "source": {"type": "base64", "media_type", "data"}}` blocks | `thinking_delta` | `message_start` + `message_delta` |
+| `responses` | `POST {base_url}/responses`, `stream: true`, `store: false`; user images become `input_text` / `input_image` parts | `response.reasoning_summary_text.delta` | `response.completed` |
 
 Model lists come from `GET {base_url}/models` for all three. Requests carry
 only the fields above — no sampling or thinking parameters are sent, so any

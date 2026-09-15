@@ -58,11 +58,27 @@ pub enum TurnKind {
         provider_id: String,
         model: String,
         content: String,
+        /// `data:` URLs; stored as image parts next to the text.
+        #[serde(default)]
+        images: Vec<String>,
     },
     /// Drop the trailing assistant reply and answer the last user message again.
     Regenerate { session_id: String },
     /// Replace the last user message and regenerate.
-    Edit { session_id: String, content: String },
+    Edit {
+        session_id: String,
+        content: String,
+        #[serde(default)]
+        images: Vec<String>,
+    },
+}
+
+/// A chat's title from its first message; an image sent without words is "Image".
+fn title_for(content: &str, images: &[String]) -> String {
+    if content.trim().is_empty() && !images.is_empty() {
+        return "Image".to_string();
+    }
+    title_from(content)
 }
 
 pub struct Engine {
@@ -103,7 +119,7 @@ impl Engine {
     fn prepare(&self, kind: &TurnKind) -> Result<Session, EngineError> {
         let now = now_rfc3339();
         let mut session = match kind {
-            TurnKind::Send { session_id, provider_id, model, content } => {
+            TurnKind::Send { session_id, provider_id, model, content, images } => {
                 let mut s = match session_id {
                     Some(id) => self.store.session(id)?,
                     None => {
@@ -117,9 +133,9 @@ impl Engine {
                 if matches!(s.messages.last(), Some(m) if m.role == Role::User) {
                     s.messages.pop();
                 }
-                s.messages.push(Message::user(content.clone(), now.clone()));
+                s.messages.push(Message::user(Content::with_images(content.clone(), images.clone()), now.clone()));
                 if s.messages.len() == 1 || s.title == "New chat" {
-                    s.title = title_from(content);
+                    s.title = title_for(content, images);
                 }
                 s
             }
@@ -130,20 +146,21 @@ impl Engine {
                 }
                 s
             }
-            TurnKind::Edit { session_id, content } => {
+            TurnKind::Edit { session_id, content, images } => {
                 let mut s = self.store.session(session_id)?;
                 while matches!(s.messages.last(), Some(m) if m.role == Role::Assistant) {
                     s.messages.pop();
                 }
+                let next = Content::with_images(content.clone(), images.clone());
                 match s.messages.last_mut() {
                     Some(m) if m.role == Role::User => {
-                        m.content = content.clone();
+                        m.content = next;
                         m.created_at = Some(now.clone());
                     }
-                    _ => s.messages.push(Message::user(content.clone(), now.clone())),
+                    _ => s.messages.push(Message::user(next, now.clone())),
                 }
                 if s.messages.len() == 1 {
-                    s.title = title_from(content);
+                    s.title = title_for(content, images);
                 }
                 s
             }
@@ -223,7 +240,7 @@ impl Engine {
         let message = if has_content {
             Some(Message {
                 role: Role::Assistant,
-                content: std::mem::take(&mut acc.text),
+                content: Content::Text(std::mem::take(&mut acc.text)),
                 created_at: Some(now_rfc3339()),
                 reasoning_content: Some(std::mem::take(&mut acc.reasoning)).filter(|r| !r.trim().is_empty()),
                 meta: Some(TurnMeta {

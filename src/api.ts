@@ -2,6 +2,8 @@
 // commands; in a plain browser (vite dev, screenshots) it runs an in-memory
 // mock so the whole UI can be exercised without the native shell.
 
+import { contentWith, textOf } from "./content";
+import { isImagePath, type ImageSource } from "./images";
 import type {
   ContextItem,
   Message,
@@ -39,6 +41,10 @@ export interface Backend {
 
   popupMenu(items: ContextItem[]): Promise<void>;
   onMenu(cb: (id: string) => void): Promise<() => void>;
+  /** Native file chooser, images only; the chosen files' bytes. */
+  pickImages(): Promise<ImageSource[]>;
+  /** Image files dragged onto the window; `hover` tracks whether one is over it right now. */
+  onDrop(cb: (files: ImageSource[]) => void, hover: (over: boolean) => void): Promise<() => void>;
   copyText(text: string): Promise<void>;
   openUrl(url: string): Promise<void>;
   saveDialog(defaultName: string, ext: string): Promise<string | null>;
@@ -50,8 +56,8 @@ export interface Backend {
   checkUpdate(): Promise<{ version: string; notes?: string } | null>;
   /** Download + install the update found by `checkUpdate`, then relaunch. */
   installUpdate(onProgress: (fraction: number) => void): Promise<void>;
-  /** Debug-only scenario hooks (env in Tauri, `?state=` in the browser). */
-  scenario(): Promise<{ state?: string | null; autosend?: string | null } | null>;
+  /** Debug-only scenario hooks (env in Tauri, `?state=` in the browser). `attach` is a file path to read as a drop would. */
+  scenario(): Promise<{ state?: string | null; autosend?: string | null; attach?: string | null; query?: string | null } | null>;
 }
 
 export const isTauri = "__TAURI_INTERNALS__" in window;
@@ -60,11 +66,17 @@ async function tauriBackend(): Promise<Backend> {
   const { invoke, Channel } = await import("@tauri-apps/api/core");
   const { listen } = await import("@tauri-apps/api/event");
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const { getCurrentWebview } = await import("@tauri-apps/api/webview");
   const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
   const { openUrl } = await import("@tauri-apps/plugin-opener");
-  const { save, ask } = await import("@tauri-apps/plugin-dialog");
+  const { save, ask, open } = await import("@tauri-apps/plugin-dialog");
   const { getVersion } = await import("@tauri-apps/api/app");
   let pendingUpdate: import("@tauri-apps/plugin-updater").Update | null = null;
+  // Paths come from the OS (drop, dialog); the bytes come back as an ArrayBuffer.
+  const readImages = (paths: string[]) =>
+    Promise.all(paths.filter(isImagePath).map((path) => invoke<ArrayBuffer>("read_image", { path }).catch((e) => (console.warn(`read_image ${path}:`, e), null)))).then((r) =>
+      r.filter((b): b is ArrayBuffer => b !== null),
+    );
 
   return {
     listSessions: () => invoke("list_sessions"),
@@ -95,6 +107,21 @@ async function tauriBackend(): Promise<Backend> {
 
     popupMenu: (items) => invoke("popup_menu", { items }),
     onMenu: (cb) => listen<string>("menu", (e) => cb(e.payload)),
+    pickImages: async () => {
+      const picked = await open({ multiple: true, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "avif", "bmp", "tiff", "tif"] }] });
+      return readImages(Array.isArray(picked) ? picked : picked ? [picked] : []);
+    },
+    onDrop: (cb, hover) =>
+      getCurrentWebview().onDragDropEvent(async (e) => {
+        const p = e.payload;
+        if (p.type === "enter") hover(p.paths.some(isImagePath));
+        else if (p.type === "leave") hover(false);
+        else if (p.type === "drop") {
+          hover(false);
+          const files = await readImages(p.paths);
+          if (files.length) cb(files);
+        }
+      }),
     copyText: (text) => writeText(text),
     openUrl: (url) => openUrl(url),
     saveDialog: async (defaultName, ext) =>
@@ -197,6 +224,35 @@ const SAMPLE_SVG = `A sleeping cat, roughly:
 
 Save it as cat.svg.`;
 
+/** A "screenshot" drawn on a canvas, for the image scenarios (`?state=image|attach`). */
+export function sampleImage(): string {
+  const c = document.createElement("canvas");
+  c.width = 960;
+  c.height = 600;
+  const ctx = c.getContext("2d")!;
+  const bg = ctx.createLinearGradient(0, 0, 960, 600);
+  bg.addColorStop(0, "#dfe7f3");
+  bg.addColorStop(1, "#f4e9dc");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 960, 600);
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.roundRect(120, 90, 720, 420, 14);
+  ctx.fill();
+  ctx.fillStyle = "#1d1d1f";
+  ctx.font = "600 26px -apple-system, Helvetica, sans-serif";
+  ctx.fillText("Weekly active users", 160, 145);
+  const bars = [0.35, 0.5, 0.42, 0.66, 0.74, 0.9, 0.82];
+  bars.forEach((v, i) => {
+    ctx.fillStyle = i === 5 ? "#0071e3" : "#c9d6ea";
+    const hgt = v * 280;
+    ctx.beginPath();
+    ctx.roundRect(170 + i * 92, 470 - hgt, 60, hgt, 6);
+    ctx.fill();
+  });
+  return c.toDataURL("image/png");
+}
+
 function mockBackend(): Backend {
   const params = new URLSearchParams(location.search);
   const state = params.get("state") ?? "chat";
@@ -275,7 +331,7 @@ function mockBackend(): Backend {
       const s = sessions.get("s1")!;
       s.messages.push({ role: "user", content: "One more thing…", created_at: now() });
     }
-    if (state === "html" || state === "html-expanded") {
+    if (state === "html" || state === "html-expanded" || state === "select-test") {
       const s = sessions.get("s1")!;
       s.messages.push({ role: "user", content: "Make me a tiny landing page.", created_at: now() });
       s.messages.push({ role: "assistant", content: SAMPLE_HTML, created_at: now(), meta: meta("anthropic/claude-sonnet-4", 310) });
@@ -284,6 +340,16 @@ function mockBackend(): Backend {
       const s = sessions.get("s1")!;
       s.messages.push({ role: "user", content: "Draw the cat as an SVG.", created_at: now() });
       s.messages.push({ role: "assistant", content: SAMPLE_SVG, created_at: now(), meta: meta("anthropic/claude-sonnet-4", 120) });
+    }
+    if (state === "image" || state === "image-expanded") {
+      const s = sessions.get("s1")!;
+      s.messages.push({ role: "user", content: contentWith("What does this chart say?", [sampleImage()]), created_at: now() });
+      s.messages.push({
+        role: "assistant",
+        content: "Weekly active users climbed for most of the period — from roughly a third of the axis to about 90% at the highlighted bar — then eased slightly in the final week. The blue bar marks the peak.",
+        created_at: now(),
+        meta: { ...meta("anthropic/claude-sonnet-4", 52)!, usage: { input_tokens: 1640, cached_input_tokens: 0, output_tokens: 52 } },
+      });
     }
   }
 
@@ -322,22 +388,23 @@ function mockBackend(): Backend {
         s.provider_id = kind.provider_id;
         s.model = kind.model;
         if (s.messages.at(-1)?.role === "user") s.messages.pop();
-        s.messages.push({ role: "user", content: kind.content, created_at: now() });
-        if (s.messages.length === 1) s.title = kind.content.split("\n")[0]!.slice(0, 60);
+        s.messages.push({ role: "user", content: contentWith(kind.content, kind.images ?? []), created_at: now() });
+        if (s.messages.length === 1) s.title = kind.content.split("\n")[0]!.slice(0, 60) || (kind.images?.length ? "Image" : "New chat");
         sessions.set(s.id, s);
       } else {
         s = sessions.get(kind.session_id)!;
         while (s.messages.at(-1)?.role === "assistant") s.messages.pop();
         if (kind.kind === "edit") {
           const last = s.messages.at(-1);
-          if (last && last.role === "user") last.content = kind.content;
-          else s.messages.push({ role: "user", content: kind.content, created_at: now() });
+          const content = contentWith(kind.content, kind.images ?? []);
+          if (last && last.role === "user") last.content = content;
+          else s.messages.push({ role: "user", content, created_at: now() });
         }
       }
       s.updated_at = now();
       onEvent({ type: "started", session: structuredClone(s) });
 
-      if (state === "error" || s.messages.at(-1)?.content.includes("fail")) {
+      if (state === "error" || textOf(s.messages.at(-1)?.content ?? "").includes("fail")) {
         await sleep(300);
         onEvent({ type: "done", session_id: s.id, error: "HTTP 401: Invalid API key", updated_at: now() });
         return;
@@ -415,6 +482,44 @@ function mockBackend(): Backend {
     onMenu: async (cb) => {
       menuCb = cb;
       return () => (menuCb = null);
+    },
+    pickImages: () =>
+      new Promise((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.multiple = true;
+        input.accept = "image/*";
+        input.onchange = () => resolve(Array.from(input.files ?? []));
+        input.oncancel = () => resolve([]);
+        input.click();
+      }),
+    onDrop: async (cb, hover) => {
+      const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+      const over = (e: DragEvent) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        hover(true);
+      };
+      const leave = (e: DragEvent) => {
+        if (e.relatedTarget === null) hover(false);
+      };
+      const drop = (e: DragEvent) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        hover(false);
+        const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/") || isImagePath(f.name));
+        if (files.length) cb(files);
+      };
+      window.addEventListener("dragenter", over);
+      window.addEventListener("dragover", over);
+      window.addEventListener("dragleave", leave);
+      window.addEventListener("drop", drop);
+      return () => {
+        window.removeEventListener("dragenter", over);
+        window.removeEventListener("dragover", over);
+        window.removeEventListener("dragleave", leave);
+        window.removeEventListener("drop", drop);
+      };
     },
     copyText: (text) => navigator.clipboard.writeText(text),
     openUrl: async (url) => {

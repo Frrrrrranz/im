@@ -26,9 +26,15 @@ export interface TurnMeta {
   error?: string;
 }
 
+/** One piece of a multimodal message, in the Chat Completions wire shape. Image URLs are `data:` URLs. */
+export type Part = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail?: string } };
+
+/** A plain string until a message carries images; then parts. */
+export type Content = string | Part[];
+
 export interface Message {
   role: Role;
-  content: string;
+  content: Content;
   created_at?: string;
   /** Chat-completions field name, so a stored trajectory replays as-is. */
   reasoning_content?: string;
@@ -90,9 +96,9 @@ export interface Settings {
 }
 
 export type TurnKind =
-  | { kind: "send"; session_id?: string | null; provider_id: string; model: string; content: string }
+  | { kind: "send"; session_id?: string | null; provider_id: string; model: string; content: string; images?: string[] }
   | { kind: "regenerate"; session_id: string }
-  | { kind: "edit"; session_id: string; content: string };
+  | { kind: "edit"; session_id: string; content: string; images?: string[] };
 
 export type TurnEvent =
   | { type: "started"; session: Session }

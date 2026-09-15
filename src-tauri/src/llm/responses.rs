@@ -3,12 +3,30 @@
 use serde_json::{json, Value};
 
 use super::{join, turns, Parsed, StreamEvent, TurnRequest};
-use crate::model::Usage;
+use crate::model::{Content, Part, Usage};
 use crate::sse::SseEvent;
+
+/// Responses input items: `input_text` / `input_image` parts for the user,
+/// plain text for earlier assistant turns.
+fn content(role: &str, c: &Content) -> Value {
+    match c {
+        Content::Text(t) => Value::String(t.clone()),
+        Content::Parts(parts) if role == "user" => Value::Array(
+            parts
+                .iter()
+                .map(|p| match p {
+                    Part::Text { text } => json!({ "type": "input_text", "text": text }),
+                    Part::ImageUrl { image_url } => json!({ "type": "input_image", "image_url": image_url.url }),
+                })
+                .collect(),
+        ),
+        Content::Parts(_) => Value::String(c.text()),
+    }
+}
 
 pub fn build(client: &reqwest::Client, req: &TurnRequest) -> reqwest::RequestBuilder {
     let input: Vec<Value> =
-        turns(&req.messages).map(|(role, m)| json!({ "role": role, "content": m.content })).collect();
+        turns(&req.messages).map(|(role, m)| json!({ "role": role, "content": content(role, &m.content) })).collect();
 
     let mut body = json!({
         "model": req.model,
@@ -135,6 +153,16 @@ mod tests {
 
     fn ev(event: &str, data: &str) -> SseEvent {
         SseEvent { event: Some(event.to_string()), data: data.to_string() }
+    }
+
+    #[test]
+    fn user_images_are_input_image_parts() {
+        let c = Content::with_images("see".into(), vec!["data:image/png;base64,AAAA".into()]);
+        let v = content("user", &c);
+        assert_eq!(v[0]["type"], "input_text");
+        assert_eq!(v[1]["type"], "input_image");
+        assert_eq!(v[1]["image_url"], "data:image/png;base64,AAAA");
+        assert_eq!(content("assistant", &c), "see");
     }
 
     #[test]

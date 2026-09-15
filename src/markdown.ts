@@ -89,31 +89,62 @@ export function setGutter(row: HTMLElement, text: string) {
 }
 
 /** Streaming: bring `body` to the freshly rendered `next` without rebuilding
- *  what didn't change. Blocks that are equal stay; a code block whose text grew
- *  is updated in place (its preview pane survives); everything else is swapped. */
+ *  what didn't change. Nodes are matched by position and updated in place
+ *  whenever they kept their kind: text is edited after its common prefix (a
+ *  selection or caret inside it stays put — replacing the node would collapse
+ *  it), elements sync their attributes and recurse, a code block keeps its
+ *  preview pane. Only a node that changed kind is swapped. */
 export function patchMarkdown(body: HTMLElement, next: DocumentFragment) {
-  const incoming = Array.from(next.childNodes);
-  const existing = Array.from(body.childNodes);
+  patchChildren(body, next);
+}
+
+function patchChildren(a: Node, b: Node) {
+  const incoming = Array.from(b.childNodes);
+  const existing = Array.from(a.childNodes);
   for (let i = 0; i < incoming.length; i++) {
-    const b = incoming[i]!;
-    const a = existing[i];
-    if (!a) {
-      body.append(b);
-      continue;
-    }
-    if (a.isEqualNode(b)) continue;
-    if (isCodeBlock(a) && isCodeBlock(b) && a.className === b.className) {
-      const from = b.querySelector("code")!;
-      const to = a.querySelector("code")!;
-      if (to.textContent !== from.textContent) {
-        to.textContent = from.textContent;
-        setGutter(a.querySelector(".code-row")!, from.textContent ?? "");
-      }
-      continue;
-    }
-    body.replaceChild(b, a);
+    const want = incoming[i]!;
+    const have = existing[i];
+    if (!have) a.appendChild(want);
+    else if (!have.isEqualNode(want) && !patchNode(have, want)) a.replaceChild(want, have);
   }
   for (let i = incoming.length; i < existing.length; i++) existing[i]!.remove();
+}
+
+/** Make `a` match `b` in place; false when they are different kinds of node. */
+function patchNode(a: Node, b: Node): boolean {
+  if (a.nodeType !== b.nodeType) return false;
+  if (a.nodeType === Node.TEXT_NODE) {
+    patchText(a as Text, (b as Text).data);
+    return true;
+  }
+  if (!(a instanceof Element) || !(b instanceof Element) || a.tagName !== b.tagName) return false;
+  if (isCodeBlock(a) || isCodeBlock(b)) {
+    // The block's own chrome (and the transcript's preview pane) is not in `b`; only the code moves.
+    if (a.className !== b.className) return false;
+    const from = b.querySelector("code")!;
+    const to = a.querySelector("code")!;
+    if (to.textContent !== from.textContent) {
+      patchChildren(to, from);
+      setGutter(a.querySelector(".code-row")!, from.textContent ?? "");
+    }
+    return true;
+  }
+  for (const attr of Array.from(a.attributes)) if (!b.hasAttribute(attr.name)) a.removeAttribute(attr.name);
+  for (const attr of Array.from(b.attributes)) if (a.getAttribute(attr.name) !== attr.value) a.setAttribute(attr.name, attr.value);
+  patchChildren(a, b);
+  return true;
+}
+
+/** Edit a text node from the first differing character on. Live ranges before
+ *  that point are untouched; DOM `deleteData`/`insertData` adjust the rest. */
+function patchText(a: Text, data: string) {
+  const old = a.data;
+  if (old === data) return;
+  let p = 0;
+  const n = Math.min(old.length, data.length);
+  while (p < n && old.charCodeAt(p) === data.charCodeAt(p)) p++;
+  if (p < old.length) a.deleteData(p, old.length - p);
+  if (p < data.length) a.insertData(p, data.slice(p));
 }
 
 function isCodeBlock(n: Node): n is HTMLElement {

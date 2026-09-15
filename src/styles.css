@@ -689,6 +689,22 @@ body.resizing .resizer.column-handle::after {
 .bubble p {
   margin: 0;
 }
+/* Images sent with a message sit above its bubble; click one to enlarge. */
+.turn.user .images {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 78%;
+  margin-bottom: 6px;
+}
+.turn.user .images img {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  border-radius: 12px;
+  border: 1px solid var(--separator);
+}
 .body {
   overflow-wrap: anywhere;
   padding: 4px 0;
@@ -715,6 +731,11 @@ body.resizing .resizer.column-handle::after {
 .turn.last .tools,
 .tools:focus-within {
   visibility: visible;
+}
+/* Nothing to edit or regenerate while a reply is still arriving. */
+.transcript.streaming .tool.pencil,
+.transcript.streaming .tool.redo {
+  display: none;
 }
 .tool {
   width: 24px;
@@ -1024,38 +1045,47 @@ details.reasoning summary:hover {
   opacity: 1;
 }
 
-/* Enlarged: the same pane, grown from where it was to the middle of the main
-   column. Geometry is set inline by htmlpane.ts; only the motion lives here. */
+/* Enlarged: the pane itself, switched to fixed positioning and grown from
+   where it was to the middle of the main column (an image gets a card of its
+   own). Geometry is set inline by htmlpane.ts; only the motion lives here. */
 .lightbox {
   position: absolute;
   inset: 0;
   z-index: 20;
-}
-.lightbox-backdrop {
-  position: absolute;
-  inset: 0;
   background: light-dark(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.45));
   opacity: 0;
   transition: opacity var(--dur) var(--ease);
 }
-.lightbox.in .lightbox-backdrop {
+.lightbox.in {
   opacity: 1;
 }
 .lightbox-card {
-  position: absolute;
+  position: fixed;
+  z-index: 21; /* above the shade, which sits inside .main */
   border-radius: 10px;
   overflow: hidden;
   background: #ffffff;
   border: 1px solid var(--separator);
   box-shadow: var(--shadow);
-  transition: left var(--dur) var(--ease), top var(--dur) var(--ease), width var(--dur) var(--ease), height var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  transform-origin: 0 0;
+  /* Only the transform moves (composited); the box is laid out once at its final size. */
+  transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
 }
-.lightbox-card .pane {
+.pane.lightbox-card {
+  aspect-ratio: auto;
+  max-height: none; /* the inline pane's proportions would leave the card's bottom white */
+}
+/* Holds the pane's slot in the code block while it is lifted. */
+.pane.ghost {
+  background: var(--fill);
+  border-color: transparent;
+}
+.lightbox-image {
   position: absolute;
   inset: 0;
-  aspect-ratio: auto;
-  border: 0;
-  border-radius: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .lightbox-card.vanish {
   opacity: 0;
@@ -1064,13 +1094,14 @@ details.reasoning summary:hover {
   position: absolute;
   top: 8px;
   right: 8px;
+  z-index: 2; /* over the pane's iframes */
   background: light-dark(rgba(255, 255, 255, 0.9), rgba(30, 30, 32, 0.85));
   color: var(--secondary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   opacity: 0;
   transition: opacity 120ms ease;
 }
-.lightbox.in .lightbox-close {
+.lightbox-card.in .lightbox-close {
   opacity: 1;
 }
 .code-bar {
@@ -1185,19 +1216,66 @@ pre.code:hover .code-bar {
 }
 .field {
   display: flex;
-  align-items: flex-end;
-  gap: 6px;
+  flex-direction: column;
   padding: 6px 6px 6px 14px;
   border: 1px solid var(--separator);
   border-radius: 20px;
   background: var(--field);
   transition: border-color 100ms ease;
 }
+.field-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
 .field:focus-within {
   border-color: light-dark(rgba(0, 0, 0, 0.22), rgba(255, 255, 255, 0.28));
 }
-.composer.editing .field {
+.composer.editing .field,
+body.dropping .field {
   border-color: var(--accent);
+}
+/* Images waiting to go out with the next message. */
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0 8px;
+}
+.attachment {
+  position: relative;
+  height: 64px;
+}
+.attachment img {
+  display: block;
+  height: 100%;
+  max-width: 160px;
+  border-radius: 8px;
+  border: 1px solid var(--separator);
+  object-fit: cover;
+}
+.attachment-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--label);
+  color: var(--canvas);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  visibility: hidden;
+}
+.attachment-remove svg {
+  width: 9px;
+  height: 9px;
+}
+.attachment:hover .attachment-remove,
+.attachment-remove:focus-visible {
+  visibility: visible;
 }
 .input {
   flex: 1;

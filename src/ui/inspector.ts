@@ -4,6 +4,7 @@
 // Clicking a row (or a map segment) jumps the transcript to that message.
 
 import * as actions from "../actions";
+import { imagesOf, textOf } from "../content";
 import { formatTokens, h, replaceChildren } from "../dom";
 import { turnMeta, turnMetaTitle } from "../meta";
 import { store, type LiveTurn, type State } from "../state";
@@ -15,7 +16,9 @@ type Mode = "turns" | "json";
 interface Entry {
   index: number | null;
   role: string;
+  /** The text only; images are counted, not measured. */
   content: string;
+  images: number;
   message?: Message;
   live?: boolean;
 }
@@ -153,7 +156,9 @@ export function createInspector(): HTMLElement {
 
   const paintJson = () => {
     const text = actions.sessionJson();
-    jsonPre.querySelector("code")!.textContent = text || "No session yet.";
+    // Inline images are megabytes of base64 on one line: show their size, not their bytes (Copy stays faithful).
+    const shown = text.replace(/"data:([\w/+.-]+);base64,([A-Za-z0-9+/=]{80,})"/g, (_, mime, b64: string) => `"data:${mime};base64,… ${formatBytes((b64.length * 3) / 4)}"`);
+    jsonPre.querySelector("code")!.textContent = shown || "No session yet.";
     copyBtn.hidden = !text;
   };
 
@@ -169,10 +174,10 @@ export function createInspector(): HTMLElement {
 function collect(s: State, streaming: boolean): Entry[] {
   const out: Entry[] = [];
   const system = s.session ? s.session.system : s.settings.system_prompt;
-  if (system) out.push({ index: null, role: "system", content: system });
+  if (system) out.push({ index: null, role: "system", content: system, images: 0 });
   const messages = s.session?.messages ?? [];
-  messages.forEach((m, i) => out.push({ index: i, role: m.role, content: m.content, message: m }));
-  if (streaming && s.currentId) out.push({ index: messages.length, role: "assistant", content: s.live[s.currentId]?.text ?? "", live: true });
+  messages.forEach((m, i) => out.push({ index: i, role: m.role, content: textOf(m.content), images: imagesOf(m.content).length, message: m }));
+  if (streaming && s.currentId) out.push({ index: messages.length, role: "assistant", content: s.live[s.currentId]?.text ?? "", images: 0, live: true });
   return out;
 }
 
@@ -191,9 +196,9 @@ function row(e: Entry, session: Session | null): HTMLElement {
     e.index === null ? null : h("span", { class: "trow-idx" }, String(e.index + 1)),
     h("span", { class: "trow-role" }, e.role),
     e.live ? h("span", { class: "dot", "aria-label": "generating" }) : null,
-    h("span", { class: "trow-size", title: `${e.content.length.toLocaleString()} characters` }, formatChars(e.content.length)),
+    h("span", { class: "trow-size", title: `${e.content.length.toLocaleString()} characters${e.images ? ` and ${e.images} image${e.images > 1 ? "s" : ""}` : ""}` }, formatChars(e.content.length), e.images ? ` · ${e.images} img` : null),
   );
-  const text = h("div", { class: "trow-text" }, e.live ? "…" : preview(e.content));
+  const text = h("div", { class: "trow-text" }, e.live ? "…" : preview(e.content) || (e.images ? "(image)" : ""));
   const m = e.message;
   const meta = m?.role === "assistant" ? turnMeta(m, { model: !!session && m.meta?.model !== session.model, reasoning: true }) : "";
   return h(
@@ -218,6 +223,10 @@ function preview(text: string): string {
 
 function formatChars(n: number): string {
   return n < 1000 ? String(n) : `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`;
+}
+
+function formatBytes(n: number): string {
+  return n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function flash(btn: HTMLElement) {

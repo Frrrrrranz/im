@@ -10,7 +10,7 @@ on-disk schema, the protocol table and the release procedure.
 ```sh
 npm install
 npx tsc --noEmit                              # frontend typecheck
-(cd src-tauri && cargo test)                  # 37 tests: parsers, store, engine e2e over a local SSE server
+(cd src-tauri && cargo test)                  # 41 tests: parsers, store, engine e2e over a local SSE server
 npx tauri build --debug --bundles app         # debug .app → src-tauri/target/debug/bundle/macos/im.app
 npm run dev &  scripts/snapshot.sh            # frontend states via headless Chrome → build/snapshots/*.png
 scripts/app-snapshot.sh out.png [light|dark]  # the REAL app renders its own window to PNG
@@ -48,7 +48,7 @@ UI, use both after any view change:
 
 - `scripts/snapshot.sh` runs the frontend against the in-memory mock backend
   (`src/api.ts`, active whenever `__TAURI_INTERNALS__` is missing) in headless
-  Chrome. `?state=chat|streaming|picker|settings|empty|noproviders|error|edit|nosidebar|json|scrolled|resized|html|html-expanded|streaming-html`
+  Chrome. `?state=chat|streaming|picker|settings|empty|noproviders|error|edit|nosidebar|json|scrolled|resized|html|html-expanded|streaming-html|svg|image|image-expanded|attach|select-test`
   (iframes need `--virtual-time-budget=3000` on the shot to have loaded)
   and `?theme=light|dark` pick the scenario; `&inspector=1` opens the right
   column (`collapse` toggles the sidebar in 4s slow motion so a
@@ -101,8 +101,28 @@ src/
   ui/htmlpane   live HTML preview *inside* an ```html code block: a pane fixed at the top of the block renders
                 the code as it streams. Two sandboxed blob: iframes: the new one waits two frames after `load`
                 (load fires before first paint) and fades in *on top* (`.top`) while the old one stays opaque
-                underneath — fading both at once let white through, which read as a flash; click
-                → grows from its own rect to the centre of `.main`, Quick Look style; Esc/backdrop/⤡ return it
+                underneath — fading both at once let white through, which read as a flash. Click → the pane
+                *itself* lifts off (`position: fixed`, class `lightbox-card`, a `.pane.ghost` holds its slot) and
+                grows from its own rect to the centre of `.main`, Quick Look style; Esc/shade/⤡ return it. It
+                must stay the same iframe: a second copy loading into a white card flashed during the growth
+                (the user saw it), and reparenting an iframe reloads it. The motion is FLIP and only
+                `transform` eases (animating width/height reflowed the live page every frame — "like a
+                slideshow"); the pane keeps the layout the user is looking at while it grows and reflows once it
+                has landed (`late`), images lay out at the target first. Two traps: (1) the pane already has a
+                computed style, so the start transform must be committed under `transition: none` or a plain
+                flush starts a none→start transition that the real move only undoes (0 frames); (2) the ⤡
+                button inside the card has its own opacity transition whose `transitionend` bubbles — `finish`
+                must check `e.target === card && propertyName === "transform"`, or the fly-back is torn down at
+                120ms and the pane snaps (that was the "not smooth at all" report). Measure in the real
+                WebKit, not Chrome: `IM_SCENARIO=html-expanded IM_QUERY="click=2000&close=1500&frames=1"
+                RUST_LOG=webview=warn scripts/app-snapshot.sh` logs `lift(open|close): N frames in 240ms` and
+                the click→motion delay (healthy: 22–23 frames on this display, ~20ms); `IM_QUERY` carries the
+                same switches the browser reads from the URL. `.pane.lightbox-card` resets
+                `aspect-ratio`/`max-height` (the 60vh cap once left a tall card's bottom white). The same
+                machinery enlarges images in user turns (`enlargeImage`, a card appended to body). In Chrome:
+                `node scripts/eval.mjs "…?state=html-expanded&click=1200&close=1200&frames=1" 3600` (it echoes
+                the page's console.warn lines); a cold headless run needs ~1s before the inline pane has
+                rendered, so never click at 600ms and call the white pane a bug
   markdown.ts   marked + DOMPurify → fragment. Code block anatomy: `pre.code > (.code-preview?) .code-body >
                 (.code-bar, .code-row > (.gutter?, .code-scroll > code))` — the gutter is a real flex column and
                 only `.code-scroll` scrolls, so long lines never pass under the numbers. The preview pane stays at
@@ -129,6 +149,22 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
   `reasoning`; old files still load via a serde alias). `usage.input_tokens` is
   the whole prompt (Anthropic cache reads/writes folded in), `cached_input_tokens`
   the cached part.
+- Images: `Content` is a string until a user message carries images, then a
+  parts list in the chat-completions shape (`text` / `image_url` with a `data:`
+  URL — sessions stay self-contained; replies are always strings).
+  `llm/anthropic.rs` and `llm/responses.rs` translate the parts on the wire;
+  `chat` passes them through. Ways in: paste, drop (Tauri's native
+  `onDragDropEvent` → paths → `read_image` command → `ArrayBuffer`; HTML5 drop
+  in the mock), `File → Attach Image…` ⌘⇧A. `src/images.ts` normalises every
+  source (decode via `createImageBitmap`/`<img>`, keep PNG/JPEG/GIF/WebP ≤ 2048px
+  and ≤ 3.5 MB byte-for-byte, otherwise redraw — PNG stays PNG, the rest JPEG),
+  so HEIC/TIFF work too. `src/content.ts` has `textOf`/`imagesOf`/`contentWith`.
+  The composer keeps attachments in a strip above the textarea (× on hover);
+  transcript images sit above the bubble and click-enlarge via the shared
+  lightbox in `htmlpane.ts`. The inspector's JSON view elides base64 to its
+  size (Copy stays faithful). Mock: `?state=image|image-expanded|attach`;
+  app: `IM_SCENARIO=send-image`, `IM_ATTACH=/path` (+`IM_AUTOSEND`); the mock
+  server logs `+Ni` per image part.
 - Reasoning is captured passively from whatever the stream carries. Don't send
   request-side thinking/sampling parameters — gateways reject unknown fields.
   The one thing we do send back: on the `chat` protocol, earlier assistant
@@ -197,8 +233,23 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
   measure the PNG (the dots read as aligned at thumbnail size when they are
   8px off). Both column headers are `data-tauri-drag-region`.
 - Vite 8 bundles with Rolldown; don't set `minify: "esbuild"` (esbuild isn't installed).
-- The live message is *patched* every frame (`patchMarkdown`), not rebuilt, so
-  stable blocks keep their DOM (and iframes) and hover chrome doesn't flicker.
+- The live message is *patched* every frame (`patchMarkdown`), not rebuilt:
+  a positional DOM diff that edits text nodes after their common prefix
+  (`deleteData`/`insertData`, so a selection or drag inside the growing
+  paragraph survives — replacing the node collapsed it), syncs attributes and
+  recurses; only a node that changed kind is swapped. The reasoning body uses
+  the same patch. `messageKey` must not include "streaming": that rebuilt every
+  message (and reloaded every preview pane — a white flash) at the start and
+  end of each reply; `.transcript.streaming` hides edit/regenerate via CSS
+  instead. When a stream ends the live element is *adopted* as the stored
+  message's element (`renderMessage(…, reuse)`), never replaced. Verify with
+  `node scripts/eval.mjs "http://localhost:1420/?state=select-test" 7000` —
+  real-time headless Chrome over the DevTools protocol; it prints
+  `lost=<frames the selection changed> panes=<distinct panes ever seen>`, both
+  must stay at 0 / 1. (`--virtual-time-budget` starves rAF, so per-frame
+  behaviour and transitions can't be observed with `shot.sh`; `eval.mjs … shot:out.png`
+  screenshots in real time.) `attachPreview` skips HTML with an unclosed
+  `<style>`/`<script>` (the parser would blank the page until it closes).
 - The HTML preview iframes are `sandbox="allow-scripts allow-forms allow-modals
   allow-popups"` (no `allow-same-origin`) on `blob:` URLs — an opaque origin
   with no IPC; srcdoc would inherit our CSP and block the page's own scripts.

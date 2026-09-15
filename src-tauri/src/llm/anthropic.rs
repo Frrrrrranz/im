@@ -2,15 +2,34 @@
 
 use serde_json::{json, Value};
 
-use super::{join, turns, Parsed, StreamEvent, TurnRequest};
-use crate::model::Usage;
+use super::{data_url, join, turns, Parsed, StreamEvent, TurnRequest};
+use crate::model::{Content, Part, Usage};
 use crate::sse::SseEvent;
 
 pub const VERSION: &str = "2023-06-01";
 
+/// Anthropic's content blocks: text stays a string, images become base64 sources.
+fn content(c: &Content) -> Value {
+    match c {
+        Content::Text(t) => Value::String(t.clone()),
+        Content::Parts(parts) => Value::Array(
+            parts
+                .iter()
+                .map(|p| match p {
+                    Part::Text { text } => json!({ "type": "text", "text": text }),
+                    Part::ImageUrl { image_url } => match data_url(&image_url.url) {
+                        Some((mime, data)) => json!({ "type": "image", "source": { "type": "base64", "media_type": mime, "data": data } }),
+                        None => json!({ "type": "image", "source": { "type": "url", "url": image_url.url } }),
+                    },
+                })
+                .collect(),
+        ),
+    }
+}
+
 pub fn build(client: &reqwest::Client, req: &TurnRequest) -> reqwest::RequestBuilder {
     let messages: Vec<Value> =
-        turns(&req.messages).map(|(role, m)| json!({ "role": role, "content": m.content })).collect();
+        turns(&req.messages).map(|(role, m)| json!({ "role": role, "content": content(&m.content) })).collect();
 
     let mut body = json!({
         "model": req.model,
@@ -139,6 +158,16 @@ mod tests {
 
     fn ev(event: &str, data: &str) -> SseEvent {
         SseEvent { event: Some(event.to_string()), data: data.to_string() }
+    }
+
+    #[test]
+    fn images_become_base64_source_blocks() {
+        let c = Content::with_images("see".into(), vec!["data:image/jpeg;base64,/9j/".into()]);
+        let v = content(&c);
+        assert_eq!(v[0]["type"], "text");
+        assert_eq!(v[1]["source"]["media_type"], "image/jpeg");
+        assert_eq!(v[1]["source"]["data"], "/9j/");
+        assert_eq!(content(&Content::Text("t".into())), "t");
     }
 
     #[test]

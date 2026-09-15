@@ -2,10 +2,11 @@
 // cached by content so a streaming frame only touches the live turn.
 
 import * as actions from "../actions";
+import { imagesOf, textOf } from "../content";
 import { formatDuration, h, icon, replaceChildren, type IconName } from "../dom";
 import { patchMarkdown, plainText, renderMarkdown } from "../markdown";
 import { turnMeta, turnMetaTitle } from "../meta";
-import { attachPreview, enlarge } from "./htmlpane";
+import { attachPreview, closeEnlarged, enlarge, enlargeImage } from "./htmlpane";
 import { store, type LiveTurn, type State } from "../state";
 import type { Message } from "../types";
 
@@ -81,15 +82,31 @@ export function createTranscript(): Transcript {
       return;
     }
     const pane = t.closest(".code-preview") as HTMLElement | null;
-    if (pane) enlarge(pane, root.closest(".main") as HTMLElement);
+    if (pane) {
+      enlarge(pane, root.closest(".main") as HTMLElement);
+      return;
+    }
+    const img = t.closest(".turn.user .images img") as HTMLImageElement | null;
+    if (img) enlargeImage(img, root.closest(".main") as HTMLElement);
   });
 
-  const messageKey = (m: Message, i: number, isLastOfRole: boolean, streaming: boolean) =>
-    `${i}|${m.role}|${m.content.length}|${hash(m.content)}|${m.reasoning_content?.length ?? 0}|${isLastOfRole}|${streaming}|${m.meta?.finish_reason ?? ""}`;
+  // Images are megabytes of base64: their lengths stand in for a hash. Whether
+  // a stream is running is deliberately not part of the key: rebuilding every
+  // message at the start and end of each reply would reload their preview
+  // panes (a white flash) and drop any selection — a class on the root hides
+  // the edit/regenerate buttons instead.
+  const messageKey = (m: Message, i: number, isLastOfRole: boolean) => {
+    const text = textOf(m.content);
+    const images = imagesOf(m.content);
+    return `${i}|${m.role}|${text.length}|${hash(text)}|${images.map((u) => u.length).join(",")}|${m.reasoning_content?.length ?? 0}|${isLastOfRole}|${m.meta?.finish_reason ?? ""}`;
+  };
 
   const render = (s: State) => {
     const session = s.session;
     const sessionId = s.currentId;
+    // An enlarged pane belongs to this chat's DOM: leaving the chat or losing
+    // the message underneath it puts it away.
+    closeEnlarged(sessionId !== cachedSessionId || s.view !== "chat");
     if (sessionId !== cachedSessionId) {
       cache = [];
       cachedSessionId = sessionId;
@@ -101,21 +118,28 @@ export function createTranscript(): Transcript {
     }
     const messages = session?.messages ?? [];
     const streaming = store.isStreaming(sessionId);
+    root.classList.toggle("streaming", streaming);
     // Something the user just did (sent, regenerated, edited) → back to the bottom.
     if ((messages.length > messageCount && messages[messages.length - 1]?.role === "user") || (streaming && !wasStreaming)) follow = true;
     messageCount = messages.length;
     wasStreaming = streaming;
     const lastUser = messages.map((m) => m.role).lastIndexOf("user");
     const lastAssistant = messages.map((m) => m.role).lastIndexOf("assistant");
+    // The reply that just finished streaming becomes the stored message's
+    // element: its DOM (preview panes, a selection in it) carries over instead
+    // of being rebuilt from the text.
+    const retiring = !streaming ? liveEl : null;
+    if (!streaming) liveEl = null;
 
     const next: Cached[] = [];
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i]!;
       // Only the newest exchange is editable/regenerable (no branching).
       const isLast = m.role === "user" ? i === lastUser && i >= messages.length - 2 : i === lastAssistant && i === messages.length - 1;
-      const key = messageKey(m, i, isLast, streaming);
+      const key = messageKey(m, i, isLast);
       const prev = cache[i];
-      next.push(prev && prev.key === key ? prev : { key, el: renderMessage(m, i, isLast, streaming) });
+      const reuse = retiring && i === messages.length - 1 && m.role === "assistant" ? retiring : undefined;
+      next.push(prev && prev.key === key ? prev : { key, el: renderMessage(m, i, isLast, reuse) });
     }
     cache = next;
     // The newest message keeps its tools line on screen; older ones show it on hover.
@@ -129,8 +153,6 @@ export function createTranscript(): Transcript {
       }
       children.push(liveEl);
       paintLive(liveEl, s.live[sessionId]!);
-    } else {
-      liveEl = null;
     }
     const error = s.errors[sessionId ?? "draft"];
     if (error) {
@@ -166,7 +188,7 @@ export function createTranscript(): Transcript {
         reasoning = reasoningBlock("Thinking…", live.reasoning, true);
         el.prepend(reasoning);
       } else {
-        replaceChildren(reasoning.querySelector(".reasoning-body")!, renderMarkdown(live.reasoning));
+        patchMarkdown(reasoning.querySelector(".reasoning-body")!, renderMarkdown(live.reasoning));
       }
       if (live.answering && !liveFolded) {
         liveFolded = true;
@@ -199,24 +221,40 @@ export function createTranscript(): Transcript {
   return { el: root, jump };
 }
 
-function renderMessage(m: Message, index: number, isLast: boolean, streaming: boolean): HTMLElement {
-  const el = h("div", { class: `turn ${m.role}`, dataset: { index: String(index) } });
+/** A message's element. `reuse` is the element that just streamed this reply:
+ *  its body is patched rather than rebuilt, so panes and selections survive. */
+function renderMessage(m: Message, index: number, isLast: boolean, reuse?: HTMLElement): HTMLElement {
+  const el = reuse ?? h("div");
+  el.className = `turn ${m.role}`;
+  el.dataset.index = String(index);
   const tools: HTMLElement[] = [];
+  const text = textOf(m.content);
 
   if (m.role === "user") {
-    el.append(h("div", { class: "bubble" }, plainText(m.content)));
-    tools.push(toolButton("copy", "Copy", () => actions.copyText(m.content)));
-    if (isLast && !streaming) tools.push(toolButton("pencil", "Edit (⌘E)", () => actions.editLast()));
+    const images = imagesOf(m.content);
+    if (images.length) el.append(h("div", { class: "images" }, images.map((src) => h("img", { src, alt: "attached image", draggable: false }))));
+    if (text) el.append(h("div", { class: "bubble" }, plainText(text)));
+    tools.push(toolButton("copy", "Copy", () => actions.copyText(text)));
+    if (isLast) tools.push(toolButton("pencil", "Edit (⌘E)", () => actions.editLast()));
   } else {
+    let reasoning = el.querySelector(":scope > details.reasoning") as HTMLDetailsElement | null;
     if (m.reasoning_content) {
       const ms = m.meta?.thinking_ms;
-      el.append(reasoningBlock(ms ? `Thought for ${formatDuration(ms)}` : "Thoughts", m.reasoning_content, false));
+      const title = ms ? `Thought for ${formatDuration(ms)}` : "Thoughts";
+      if (reasoning) {
+        reasoning.querySelector("summary")!.textContent = title;
+        patchMarkdown(reasoning.querySelector(".reasoning-body")!, renderMarkdown(m.reasoning_content));
+      } else el.prepend(reasoningBlock(title, m.reasoning_content, false));
+    } else reasoning?.remove();
+    let body = el.querySelector(":scope > .body") as HTMLElement | null;
+    if (body) patchMarkdown(body, renderMarkdown(text));
+    else {
+      body = h("div", { class: "body md" }, renderMarkdown(text));
+      el.append(body);
     }
-    const body = h("div", { class: "body md" }, renderMarkdown(m.content));
     attachPreviews(body);
-    el.append(body);
-    tools.push(toolButton("copy", "Copy", (btn) => (actions.copyText(m.content), flash(btn, "Copied"))));
-    if (isLast && !streaming) tools.push(toolButton("redo", "Regenerate (⌘R)", () => void actions.regenerate()));
+    tools.push(toolButton("copy", "Copy", (btn) => (actions.copyText(text), flash(btn, "Copied"))));
+    if (isLast) tools.push(toolButton("redo", "Regenerate (⌘R)", () => void actions.regenerate()));
     const meta = turnMeta(m, { model: true });
     if (meta) tools.push(h("span", { class: "meta", title: turnMetaTitle(m) }, meta));
   }
@@ -227,12 +265,14 @@ function renderMessage(m: Message, index: number, isLast: boolean, streaming: bo
   bar.addEventListener("mousedown", (e) => {
     if (e.detail > 1) e.preventDefault();
   });
+  el.querySelector(":scope > .tools")?.remove();
   el.append(bar);
 
   el.addEventListener("contextmenu", (e) => {
     // Let the native text menu handle selections; ours is for the whole turn.
     if (window.getSelection()?.toString()) return;
     e.preventDefault();
+    const streaming = store.isStreaming(store.state.currentId);
     const items = [{ id: `ctx:copy:${index}`, label: "Copy" }];
     if (m.reasoning_content) items.push({ id: `ctx:copy_reasoning:${index}`, label: "Copy Reasoning" });
     if (isLast && !streaming) {
@@ -268,7 +308,7 @@ function reasoningBlock(title: string, text: string, open: boolean): HTMLDetails
 }
 
 function toolButton(name: IconName, title: string, onClick: (btn: HTMLButtonElement) => void): HTMLButtonElement {
-  const btn = h("button", { class: "tool", title, "aria-label": title }, icon(name)) as HTMLButtonElement;
+  const btn = h("button", { class: `tool ${name}`, title, "aria-label": title }, icon(name)) as HTMLButtonElement;
   btn.addEventListener("click", () => onClick(btn));
   return btn;
 }

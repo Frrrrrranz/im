@@ -2,19 +2,32 @@
 // these, so behaviour is defined once.
 
 import type { Backend } from "./api";
+import { imagesOf, textOf } from "./content";
+import { normalizeImage, type ImageSource } from "./images";
 import { store } from "./state";
 import type { Appearance, ContextItem, Session, TurnKind } from "./types";
 
+export interface ComposerHandle {
+  /** Replace the draft (edit last message, cancel edit). */
+  seed(text: string, images: string[]): void;
+  /** Add ready `data:` URLs to the draft. */
+  attach(images: string[]): void;
+  /** Set the text, keeping the attachments. */
+  type(text: string): void;
+  /** As if Return were pressed. */
+  submit(): void;
+}
+
 let backend: Backend;
-let composerSeed: ((text: string) => void) | null = null;
+let composer: ComposerHandle | null = null;
 
 export function setBackend(b: Backend) {
   backend = b;
 }
 
-/** The composer registers itself so "edit last message" can hand it text. */
-export function registerComposer(seed: (text: string) => void) {
-  composerSeed = seed;
+/** The composer registers itself so edits and attachments can reach its draft. */
+export function registerComposer(handle: ComposerHandle) {
+  composer = handle;
 }
 
 export async function init() {
@@ -195,12 +208,12 @@ export function canSend(): boolean {
   return !!m && !!m.model && store.state.providers.some((p) => p.id === m.providerId) && !store.isStreaming(store.state.currentId);
 }
 
-export async function send(content: string) {
+export async function send(content: string, images: string[] = []) {
   const text = content.trim();
-  if (!text) return;
+  if (!text && images.length === 0) return;
   const { currentId, editing } = store.state;
   if (editing && currentId) {
-    await runTurn({ kind: "edit", session_id: currentId, content: text });
+    await runTurn({ kind: "edit", session_id: currentId, content: text, images });
     return;
   }
   const m = currentModel();
@@ -208,7 +221,27 @@ export async function send(content: string) {
     togglePicker(true);
     return;
   }
-  await runTurn({ kind: "send", session_id: currentId, provider_id: m.providerId, model: m.model, content: text });
+  await runTurn({ kind: "send", session_id: currentId, provider_id: m.providerId, model: m.model, content: text, images });
+}
+
+/** Files from the menu's chooser, a paste or a drop → provider-ready images in the draft. */
+export async function attachImages(sources: ImageSource[]) {
+  if (sources.length === 0) return;
+  const results = await Promise.allSettled(sources.map(normalizeImage));
+  const ready = results.filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled").map((r) => r.value);
+  const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (ready.length) composer?.attach(ready);
+  if (failed) store.set({ errors: { ...store.state.errors, [store.state.currentId ?? "draft"]: `Couldn't attach image: ${failed.reason instanceof Error ? failed.reason.message : String(failed.reason)}` } });
+}
+
+export async function pickImages() {
+  await attachImages(await backend.pickImages());
+}
+
+/** Type `text` into the composer and press Return, attachments included (debug scenarios). */
+export function typeAndSend(text: string) {
+  composer?.type(text);
+  composer?.submit();
 }
 
 export async function regenerate() {
@@ -224,13 +257,13 @@ export function editLast() {
   const last = [...session.messages].reverse().find((m) => m.role === "user");
   if (!last) return;
   store.set({ editing: true });
-  composerSeed?.(last.content);
+  composer?.seed(textOf(last.content), imagesOf(last.content));
 }
 
 export function cancelEdit() {
   if (store.state.editing) {
     store.set({ editing: false });
-    composerSeed?.("");
+    composer?.seed("", []);
   }
 }
 
@@ -384,6 +417,9 @@ export function handleMenu(id: string) {
     case "new_chat":
       newChat();
       break;
+    case "attach_image":
+      void pickImages();
+      break;
     case "export_chat":
       void exportCurrent();
       break;
@@ -447,7 +483,7 @@ function handleContext(id: string) {
       break;
     case "copy": {
       const m = session?.messages[Number(arg)];
-      if (m) copyText(m.content);
+      if (m) copyText(textOf(m.content));
       break;
     }
     case "copy_reasoning": {

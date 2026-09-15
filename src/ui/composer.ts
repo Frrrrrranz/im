@@ -1,21 +1,46 @@
 // Auto-growing textarea. Return sends unless an IME composition is in
 // progress (CJK input) or Shift is held. Escape stops generation / edit.
+// Images pasted, dropped or chosen (File → Attach Image…) sit in a strip
+// above the text until the message goes out.
 
 import * as actions from "../actions";
-import { h, icon } from "../dom";
+import { h, icon, replaceChildren } from "../dom";
 import { store, type State } from "../state";
 
 export function createComposer(): HTMLElement {
   const textarea = h("textarea", { class: "input", rows: 1, placeholder: "Message", spellcheck: true, autofocus: true }) as HTMLTextAreaElement;
   const button = h("button", { class: "send", type: "button", "aria-label": "Send" }, icon("arrowUp")) as HTMLButtonElement;
   const editBar = h("div", { class: "edit-bar" }, h("span", null, "Editing last message"), h("button", { class: "link", onclick: () => actions.cancelEdit() }, "Cancel"));
-  const root = h("div", { class: "composer" }, editBar, h("div", { class: "field" }, textarea, button));
+  const strip = h("div", { class: "attachments", hidden: true });
+  const root = h("div", { class: "composer" }, editBar, h("div", { class: "field" }, strip, h("div", { class: "field-row" }, textarea, button)));
+
+  let attachments: string[] = [];
 
   const resize = () => {
     textarea.style.height = "0px";
     const max = Math.max(120, window.innerHeight * 0.4);
     textarea.style.height = `${Math.min(textarea.scrollHeight, max)}px`;
     textarea.style.overflowY = textarea.scrollHeight > max ? "auto" : "hidden";
+  };
+
+  const paintAttachments = () => {
+    strip.hidden = attachments.length === 0;
+    replaceChildren(
+      strip,
+      attachments.map((url, i) =>
+        h(
+          "div",
+          { class: "attachment" },
+          h("img", { src: url, alt: "" }),
+          h("button", { class: "attachment-remove", type: "button", title: "Remove", "aria-label": "Remove image", onclick: () => setAttachments(attachments.filter((_, j) => j !== i)) }, icon("close")),
+        ),
+      ),
+    );
+    updateButton(store.state);
+  };
+  const setAttachments = (next: string[]) => {
+    attachments = next;
+    paintAttachments();
   };
 
   let composing = false;
@@ -25,19 +50,26 @@ export function createComposer(): HTMLElement {
     resize();
     updateButton(store.state);
   });
+  textarea.addEventListener("paste", (e) => {
+    const files = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+    e.preventDefault();
+    void actions.attachImages(files);
+  });
 
   const submit = () => {
     const text = textarea.value;
-    if (!text.trim()) return;
+    if (!text.trim() && attachments.length === 0) return;
     if (!actions.canSend()) {
       if (store.isStreaming(store.state.currentId)) return;
       actions.togglePicker(true);
       return;
     }
+    const images = attachments;
     textarea.value = "";
+    setAttachments([]);
     resize();
-    void actions.send(text);
-    updateButton(store.state);
+    void actions.send(text, images);
   };
 
   textarea.addEventListener("keydown", (e) => {
@@ -62,7 +94,7 @@ export function createComposer(): HTMLElement {
     button.replaceChildren(icon(streaming ? "stop" : "arrowUp"));
     button.classList.toggle("stop", streaming);
     button.setAttribute("aria-label", streaming ? "Stop" : "Send");
-    button.disabled = !streaming && !textarea.value.trim();
+    button.disabled = !streaming && !textarea.value.trim() && attachments.length === 0;
   };
 
   let lastSession: string | null | undefined;
@@ -76,18 +108,31 @@ export function createComposer(): HTMLElement {
       lastSession = s.currentId;
       if (!s.editing) {
         textarea.value = "";
+        setAttachments([]);
         resize();
       }
       if (s.view === "chat") requestAnimationFrame(() => textarea.focus());
     }
   };
 
-  actions.registerComposer((text) => {
-    textarea.value = text;
-    resize();
-    textarea.focus();
-    textarea.setSelectionRange(text.length, text.length);
-    updateButton(store.state);
+  actions.registerComposer({
+    seed: (text, images) => {
+      textarea.value = text;
+      setAttachments(images);
+      resize();
+      textarea.focus();
+      textarea.setSelectionRange(text.length, text.length);
+    },
+    attach: (images) => {
+      setAttachments([...attachments, ...images]);
+      textarea.focus();
+    },
+    type: (text) => {
+      textarea.value = text;
+      resize();
+      updateButton(store.state);
+    },
+    submit,
   });
 
   store.subscribe(render);

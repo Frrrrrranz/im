@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use im_lib::engine::{Engine, TurnEvent, TurnKind};
-use im_lib::model::{Protocol, Provider, Role};
+use im_lib::model::{Content, Protocol, Provider, Role};
 use im_lib::store::Store;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -111,6 +111,43 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
             )
             .await;
         }
+        // One image turn per protocol: the same stored part, three wire shapes.
+        "/img/chat/completions" => {
+            let v: serde_json::Value = serde_json::from_str(body).unwrap();
+            let user = &v["messages"][1]; // after the system message
+            assert_eq!(user["content"][0], serde_json::json!({ "type": "text", "text": "see" }), "body was: {body}");
+            assert_eq!(user["content"][1], serde_json::json!({ "type": "image_url", "image_url": { "url": "data:image/png;base64,AAAA" } }));
+            write_sse(sock, &["data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n", "data: [DONE]\n\n"]).await;
+        }
+        "/img/messages" => {
+            let v: serde_json::Value = serde_json::from_str(body).unwrap();
+            let user = &v["messages"][0];
+            assert_eq!(user["content"][0], serde_json::json!({ "type": "text", "text": "see" }), "body was: {body}");
+            assert_eq!(user["content"][1], serde_json::json!({ "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": "AAAA" } }));
+            write_sse(
+                sock,
+                &[
+                    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n",
+                    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\n",
+                    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+                ],
+            )
+            .await;
+        }
+        "/img/responses" => {
+            let v: serde_json::Value = serde_json::from_str(body).unwrap();
+            let user = &v["input"][0];
+            assert_eq!(user["content"][0], serde_json::json!({ "type": "input_text", "text": "see" }), "body was: {body}");
+            assert_eq!(user["content"][1], serde_json::json!({ "type": "input_image", "image_url": "data:image/png;base64,AAAA" }));
+            write_sse(
+                sock,
+                &[
+                    "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n",
+                    "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":1}}}\n\n",
+                ],
+            )
+            .await;
+        }
         "/bad/chat/completions" => {
             let body = r#"{"error":{"message":"Incorrect API key provided","type":"invalid_request_error"}}"#;
             sock.write_all(format!("HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes())
@@ -171,7 +208,7 @@ fn collect() -> (Arc<Mutex<Vec<TurnEvent>>>, impl FnMut(TurnEvent)) {
 }
 
 fn send(content: &str) -> TurnKind {
-    TurnKind::Send { session_id: None, provider_id: "p".into(), model: "m".into(), content: content.into() }
+    TurnKind::Send { session_id: None, provider_id: "p".into(), model: "m".into(), content: content.into(), images: vec![] }
 }
 
 #[tokio::test]
@@ -196,7 +233,7 @@ async fn chat_protocol_round_trip_persists_trajectory() {
     assert!(error.is_none());
     let m = message.as_ref().unwrap();
     assert_eq!(m.role, Role::Assistant);
-    assert_eq!(m.content, "Hello");
+    assert_eq!(m.content.text(), "Hello");
     assert_eq!(m.reasoning_content.as_deref(), Some("think"));
     let meta = m.meta.as_ref().unwrap();
     assert_eq!(meta.finish_reason.as_deref(), Some("stop"));
@@ -207,13 +244,13 @@ async fn chat_protocol_round_trip_persists_trajectory() {
     // On disk: a replayable two-message trajectory.
     let saved = engine.store().session(&session.id).unwrap();
     assert_eq!(saved.messages.len(), 2);
-    assert_eq!(saved.messages[1].content, "Hello");
+    assert_eq!(saved.messages[1].content.text(), "Hello");
     assert!(!engine.is_active(&session.id));
 
     // Second turn on the same session appends; the request carries both prior messages.
     let (events2, emit2) = collect();
     engine
-        .run_turn(TurnKind::Send { session_id: Some(session.id.clone()), provider_id: "p".into(), model: "m".into(), content: "again".into() }, emit2)
+        .run_turn(TurnKind::Send { session_id: Some(session.id.clone()), provider_id: "p".into(), model: "m".into(), content: "again".into(), images: vec![] }, emit2)
         .await
         .unwrap();
     let TurnEvent::Started { session: s2 } = &events2.lock().unwrap()[0] else { panic!() };
@@ -231,7 +268,7 @@ async fn anthropic_and_responses_protocols() {
     let TurnEvent::Done { message, error, .. } = events.lock().unwrap().last().unwrap().clone() else { panic!() };
     assert!(error.is_none());
     let m = message.unwrap();
-    assert_eq!(m.content, "Hi there");
+    assert_eq!(m.content.text(), "Hi there");
     assert_eq!(m.reasoning_content.as_deref(), Some("hmm"));
     let meta = m.meta.unwrap();
     assert_eq!(meta.protocol, Protocol::Anthropic);
@@ -244,7 +281,7 @@ async fn anthropic_and_responses_protocols() {
     let TurnEvent::Done { message, error, .. } = events.lock().unwrap().last().unwrap().clone() else { panic!() };
     assert!(error.is_none());
     let m = message.unwrap();
-    assert_eq!(m.content, "Yo");
+    assert_eq!(m.content.text(), "Yo");
     assert!(m.reasoning_content.is_none());
     assert_eq!(m.meta.unwrap().usage.input_tokens, Some(5));
 }
@@ -267,12 +304,12 @@ async fn http_error_leaves_user_message_and_no_reply() {
     // Retrying replaces the dangling user message instead of stacking a second one.
     let (events2, emit2) = collect();
     engine
-        .run_turn(TurnKind::Send { session_id: Some(session.id.clone()), provider_id: "p".into(), model: "m".into(), content: "hello again".into() }, emit2)
+        .run_turn(TurnKind::Send { session_id: Some(session.id.clone()), provider_id: "p".into(), model: "m".into(), content: "hello again".into(), images: vec![] }, emit2)
         .await
         .unwrap();
     let TurnEvent::Started { session: s2 } = &events2.lock().unwrap()[0] else { panic!() };
     assert_eq!(s2.messages.len(), 1);
-    assert_eq!(s2.messages[0].content, "hello again");
+    assert_eq!(s2.messages[0].content.text(), "hello again");
 }
 
 #[tokio::test]
@@ -295,7 +332,7 @@ async fn cancel_keeps_partial_text() {
     let TurnEvent::Done { message, error, session_id, .. } = events.last().unwrap() else { panic!() };
     assert!(error.is_none());
     let m = message.as_ref().unwrap();
-    assert_eq!(m.content, "partial");
+    assert_eq!(m.content.text(), "partial");
     assert_eq!(m.meta.as_ref().unwrap().finish_reason.as_deref(), Some("cancelled"));
     assert_eq!(engine.store().session(session_id).unwrap().messages.len(), 2);
     assert!(!engine.is_active(session_id));
@@ -308,7 +345,7 @@ async fn non_streaming_json_reply_is_accepted() {
     let (events, emit) = collect();
     engine.run_turn(send("x"), emit).await.unwrap();
     let TurnEvent::Done { message, .. } = events.lock().unwrap().last().unwrap().clone() else { panic!() };
-    assert_eq!(message.unwrap().content, "whole");
+    assert_eq!(message.unwrap().content.text(), "whole");
 }
 
 #[tokio::test]
@@ -325,12 +362,12 @@ async fn regenerate_and_edit_rewrite_the_newest_exchange() {
     engine.run_turn(TurnKind::Regenerate { session_id: id.clone() }, |_| {}).await.unwrap();
     let s = engine.store().session(&id).unwrap();
     assert_eq!(s.messages.len(), 2, "regenerate replaces, never appends");
-    assert_eq!(s.messages[0].content, "first");
+    assert_eq!(s.messages[0].content.text(), "first");
 
-    engine.run_turn(TurnKind::Edit { session_id: id.clone(), content: "edited".into() }, |_| {}).await.unwrap();
+    engine.run_turn(TurnKind::Edit { session_id: id.clone(), content: "edited".into(), images: vec![] }, |_| {}).await.unwrap();
     let s = engine.store().session(&id).unwrap();
     assert_eq!(s.messages.len(), 2);
-    assert_eq!(s.messages[0].content, "edited");
+    assert_eq!(s.messages[0].content.text(), "edited");
     assert_eq!(s.messages[1].role, Role::Assistant);
 }
 
@@ -350,7 +387,7 @@ async fn busy_session_rejects_second_turn() {
         }
     };
     let err = engine
-        .run_turn(TurnKind::Send { session_id: Some(id.clone()), provider_id: "p".into(), model: "m".into(), content: "again".into() }, |_| {})
+        .run_turn(TurnKind::Send { session_id: Some(id.clone()), provider_id: "p".into(), model: "m".into(), content: "again".into(), images: vec![] }, |_| {})
         .await
         .unwrap_err();
     assert_eq!(err.to_string(), "this chat is already generating");
@@ -364,4 +401,26 @@ async fn list_models_sorted() {
     let client = im_lib::llm::http_client();
     let ids = im_lib::llm::list_models(&client, Protocol::Chat, &format!("{base}/v1"), Some("k")).await.unwrap();
     assert_eq!(ids, vec!["a-model", "b-model"]);
+}
+
+#[tokio::test]
+async fn images_reach_every_protocol_and_are_stored_as_parts() {
+    let base = serve().await;
+    for protocol in [Protocol::Chat, Protocol::Anthropic, Protocol::Responses] {
+        let (_dir, engine) = engine_with(&base, protocol, "img");
+        let (events, emit) = collect();
+        let kind = TurnKind::Send { session_id: None, provider_id: "p".into(), model: "m".into(), content: "see".into(), images: vec!["data:image/png;base64,AAAA".into()] };
+        engine.run_turn(kind, emit).await.unwrap();
+        let TurnEvent::Done { message, error, session_id, .. } = events.lock().unwrap().last().unwrap().clone() else { panic!() };
+        assert!(error.is_none(), "{protocol:?}: {error:?}");
+        assert_eq!(message.unwrap().content.text(), "ok");
+
+        // On disk the user turn is parts in the chat-completions shape; the reply stays a string.
+        let saved = engine.store().session(&session_id).unwrap();
+        assert!(matches!(saved.messages[0].content, Content::Parts(_)));
+        assert_eq!(saved.messages[0].content.text(), "see");
+        assert_eq!(saved.messages[0].content.images(), vec!["data:image/png;base64,AAAA"]);
+        assert!(matches!(saved.messages[1].content, Content::Text(_)));
+        assert_eq!(saved.title, "see");
+    }
 }

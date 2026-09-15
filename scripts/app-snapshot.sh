@@ -2,8 +2,9 @@
 # Launch the debug .app with fixture data and capture its own window to PNG.
 #   scripts/app-snapshot.sh [out.png] [theme]        theme: system|light|dark
 # Environment:
-#   IM_SCENARIO=picker|settings|streaming|edit|error   UI state to open
+#   IM_SCENARIO=picker|settings|streaming|edit|error|attach|send-image   UI state to open
 #   IM_AUTOSEND="text"                                  send a message on launch
+#   IM_ATTACH=/path/to/photo.heic                       attach a file first (read_image → downscale), as a drop would
 #   PROVIDER=mock                                       default to the local mock
 #                                                       (start scripts/mock_server.py first)
 #   SIDEBAR=0                                           start with the sidebar collapsed

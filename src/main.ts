@@ -1,6 +1,7 @@
 import * as actions from "./actions";
-import { createBackend, isTauri } from "./api";
+import { createBackend, isTauri, sampleImage } from "./api";
 import { h } from "./dom";
+import { normalizeImage } from "./images";
 import { store } from "./state";
 import { createComposer } from "./ui/composer";
 import { createInspector } from "./ui/inspector";
@@ -71,6 +72,11 @@ async function main() {
   });
 
   await backend.onMenu(actions.handleMenu);
+  // Image files dropped anywhere on the window land in the composer.
+  await backend.onDrop(
+    (files) => void actions.attachImages(files),
+    (over) => document.body.classList.toggle("dropping", over),
+  );
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && store.state.view === "settings" && !(e.target as HTMLElement).closest("select")) {
       e.preventDefault();
@@ -97,8 +103,16 @@ async function main() {
 }
 
 /** Drives the UI into a screenshot-able state (scripts/snapshot.sh, scripts/app-snapshot.sh). */
-function applyScenario({ state, autosend }: { state?: string | null; autosend?: string | null }) {
-  if (autosend) void actions.send(autosend);
+function applyScenario({ state, autosend, attach, query }: { state?: string | null; autosend?: string | null; attach?: string | null; query?: string | null }) {
+  // Switches for a scenario: `?click=1200&close=1500&frames=1` in the browser, `IM_QUERY=…` in the app.
+  const opts = new URLSearchParams(query ?? location.search);
+  if (attach) {
+    // IM_ATTACH=/path: the file goes through read_image → normalizeImage exactly as a drop would.
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke<ArrayBuffer>("read_image", { path: attach }))
+      .then((buf) => actions.attachImages([buf]))
+      .then(() => autosend && actions.typeAndSend(autosend));
+  } else if (autosend) void actions.send(autosend);
   switch (state) {
     case "streaming":
       void actions.send("Explain the streaming pipeline once more, with the code sample.");
@@ -115,8 +129,56 @@ function applyScenario({ state, autosend }: { state?: string | null; autosend?: 
     case "json":
       (document.querySelector(".inspector .seg:last-child") as HTMLElement | null)?.click();
       break;
-    case "html-expanded":
-      setTimeout(() => (document.querySelector("pre.code.html .code-preview") as HTMLElement | null)?.click(), 600);
+    case "html-expanded": {
+      // `click=<ms>` delays the click (a cold headless run needs ~1s before the pane has rendered);
+      // `close=<ms>` presses ⤡ that much later; `frames=1` reports, per motion, how many frames it
+      // painted and how long the click took to start moving (console.warn → the Rust log in the app).
+      const clickAt = Number(opts.get("click") ?? 600);
+      let clicked = 0;
+      let phase = "open";
+      setTimeout(() => {
+        clicked = performance.now();
+        (document.querySelector("pre.code.html .code-preview") as HTMLElement | null)?.click();
+      }, clickAt);
+      if (opts.has("close")) {
+        setTimeout(() => {
+          clicked = performance.now();
+          phase = "close";
+          (document.querySelector(".lightbox-close") as HTMLElement | null)?.click();
+        }, clickAt + Number(opts.get("close")));
+      }
+      if (opts.has("frames")) {
+        let frames = 0;
+        let running = false;
+        let moving: EventTarget | null = null; // remembered from transitionstart: dispose() strips the class before the end event bubbles here
+        const isCard = (e: TransitionEvent) => e.propertyName === "transform" && (e.target === moving || (e.target as HTMLElement).classList.contains("lightbox-card"));
+        const tick = () => {
+          frames++;
+          if (running) requestAnimationFrame(tick);
+        };
+        document.addEventListener("transitionstart", (e) => {
+          if (!isCard(e)) return;
+          moving = e.target;
+          frames = 0;
+          running = true;
+          console.warn(`lift(${phase}): motion began ${Math.round(performance.now() - clicked)}ms after the click`);
+          requestAnimationFrame(tick);
+        });
+        document.addEventListener("transitioncancel", (e) => {
+          if (isCard(e as TransitionEvent)) console.warn(`lift(${phase}): transform transition CANCELLED after ${frames} frames`);
+        });
+        document.addEventListener("transitionend", (e) => {
+          if (!isCard(e)) return;
+          running = false;
+          const line = `lift(${phase}): ${frames} frames in ${Math.round(e.elapsedTime * 1000)}ms`;
+          console.warn(line);
+          document.title += ` | ${line}`;
+        });
+      }
+      break;
+    }
+    case "image-expanded":
+      setTimeout(() => (document.querySelector(".turn.user .images img") as HTMLElement | null)?.click(), Number(opts.get("click") ?? 600));
       break;
     case "scrolled":
       // Reader has scrolled up: the jump-to-bottom button should be showing.
@@ -147,11 +209,55 @@ function applyScenario({ state, autosend }: { state?: string | null; autosend?: 
     case "edit":
       actions.editLast();
       break;
+    case "attach":
+      // An image waiting in the composer, as after a paste or drop.
+      void actions.attachImages([sampleImage()]);
+      break;
+    case "send-image":
+      // A whole turn with an image, end to end (PROVIDER=mock shows `+1i` in the server log).
+      void normalizeImage(sampleImage()).then((url) => actions.send("What does this chart say?", [url]));
+      break;
     case "collapse":
       // Slow the slide right down so a snapshot lands in the middle of it.
       document.documentElement.style.setProperty("--dur", "4s");
       setTimeout(() => actions.toggleSidebar(), 300);
       break;
+    case "select-test": {
+      // Does a selection inside the *growing* paragraph survive the per-frame patch?
+      // Result lands in document.title for `chrome --dump-dom`.
+      void actions.send("Explain the streaming pipeline once more, with the code sample.");
+      const sel = getSelection()!;
+      let want = "";
+      let frames = 0;
+      let lost = 0;
+      let panes = 0;
+      let ticks = 0;
+      let liveSeen = 0;
+      const seen = new Set<Element>();
+      const report = h("div", { style: { position: "fixed", top: "44px", left: "50%", transform: "translateX(-50%)", zIndex: "99", padding: "4px 10px", background: "#ffe45c", color: "#000", font: "13px/1.4 Menlo, monospace", whiteSpace: "pre" } });
+      document.body.append(report);
+      const tick = () => {
+        ticks++;
+        if (document.querySelector(".turn.live")) liveSeen++;
+        document.querySelectorAll(".transcript .pane").forEach((p) => seen.add(p));
+        panes = seen.size;
+        if (!want) {
+          const p = Array.from(document.querySelectorAll(".turn.live .body > p")).pop();
+          const t = Array.from(p?.childNodes ?? []).find((n): n is Text => n.nodeType === Node.TEXT_NODE && (n as Text).length > 20);
+          if (t) {
+            sel.setBaseAndExtent(t, 2, t, 12);
+            want = sel.toString();
+          }
+        } else {
+          frames++;
+          if (sel.toString() !== want) lost++;
+        }
+        report.textContent = document.title = `select-test ${frames < 150 ? "running" : "done"} ticks=${ticks} live=${liveSeen} frames=${frames} lost=${lost} panes=${panes} want=${JSON.stringify(want)}`;
+        if (frames < 150) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      break;
+    }
     case "collapse-frames": {
       // Real-speed collapse; logs how many frames it painted (RUST_LOG=webview=warn).
       const sidebar = document.querySelector(".sidebar")!;
@@ -199,6 +305,7 @@ function forwardErrors() {
 function installBrowserShortcuts() {
   const map: Record<string, string> = {
     "meta+n": "new_chat",
+    "meta+shift+a": "attach_image",
     "meta+,": "settings",
     "meta+k": "choose_model",
     "meta+.": "stop",

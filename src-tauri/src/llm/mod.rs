@@ -63,6 +63,14 @@ fn join(base: &str, path: &str) -> String {
     format!("{}/{}", base.trim_end_matches('/'), path.trim_start_matches('/'))
 }
 
+/// `data:image/png;base64,AAAA` → `("image/png", "AAAA")`; None for anything else.
+fn data_url(url: &str) -> Option<(&str, &str)> {
+    let rest = url.strip_prefix("data:")?;
+    let (meta, data) = rest.split_once(',')?;
+    let mime = meta.strip_suffix(";base64")?;
+    Some((mime, data))
+}
+
 /// The conversation's user and assistant turns with their wire role names
 /// (the system prompt travels separately).
 fn turns(messages: &[Message]) -> impl Iterator<Item = (&'static str, &Message)> + '_ {

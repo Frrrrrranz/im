@@ -38,6 +38,21 @@ def chunks(text, n=6):
         yield text[i : i + n]
 
 
+def text_of(content):
+    """A message's text, whether `content` is a string or a list of parts."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(p.get("text", "") for p in content if isinstance(p, dict) and "text" in p)
+    return ""
+
+
+def images_in(content):
+    if not isinstance(content, list):
+        return 0
+    return sum(1 for p in content if isinstance(p, dict) and p.get("type") in ("image_url", "image", "input_image"))
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -73,13 +88,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length) or b"{}")
-        last = ""
         msgs = body.get("messages") or body.get("input") or []
-        if msgs:
-            last = msgs[-1].get("content", "") if isinstance(msgs[-1], dict) else ""
-        # One line per request showing what came back to us: role, chars, and whether
-        # earlier replies carried their reasoning_content (thinking models need it).
-        shape = " ".join(f"{m.get('role','?')[0]}{len(str(m.get('content','')))}{'+r' if m.get('reasoning_content') else ''}" for m in msgs if isinstance(m, dict))
+        last = text_of(msgs[-1].get("content", "")) if msgs and isinstance(msgs[-1], dict) else ""
+        # One line per request showing what came back to us: role, chars, whether
+        # earlier replies carried their reasoning_content (thinking models need it),
+        # and `+Ni` for N image parts.
+        shape = " ".join(
+            f"{m.get('role','?')[0]}{len(text_of(m.get('content','')))}{'+r' if m.get('reasoning_content') else ''}{'+%di' % images_in(m.get('content')) if images_in(m.get('content')) else ''}"
+            for m in msgs
+            if isinstance(m, dict)
+        )
         sys.stderr.write(f"mock: {self.path} messages=[{shape}]\n")
         if "fail" in last:
             return self._json(401, {"error": {"message": "Invalid API key (mock)", "type": "authentication_error"}})

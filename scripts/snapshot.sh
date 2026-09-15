@@ -29,4 +29,7 @@ shot html-light      "$base?state=html&theme=light"
 shot html-expanded-dark "$base?state=html-expanded&theme=dark"
 shot streaming-html  "$base?state=streaming-html&theme=light"
 shot svg-light       "$base?state=svg&theme=light"
+shot image-light     "$base?state=image&theme=light"
+shot image-expanded-dark "$base?state=image-expanded&theme=dark"
+shot attach-dark     "$base?state=attach&theme=dark"
 shot settings-dark   "$base?state=settings&theme=dark" 1100x1500

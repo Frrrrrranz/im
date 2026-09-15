@@ -63,6 +63,7 @@ pub fn install(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
 
     let file_menu = SubmenuBuilder::new(app, "File")
         .item(&MenuItem::with_id(app, "new_chat", "New Chat", true, Some("CmdOrCtrl+N"))?)
+        .item(&MenuItem::with_id(app, "attach_image", "Attach Image…", true, Some("Shift+CmdOrCtrl+A"))?)
         .separator()
         .item(&MenuItem::with_id(app, "export_chat", "Export Chat…", true, Some("Shift+CmdOrCtrl+E"))?)
         .item(&MenuItem::with_id(app, "export_all", "Export All Chats as JSONL…", true, None::<&str>)?)
