@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "01k5fixture0000000000000001",
+  "title": "How does the streaming pipeline work?",
+  "created_at": "2026-09-14T12:54:53Z",
+  "updated_at": "2026-09-14T12:54:53Z",
+  "provider_id": "openrouter",
+  "model": "anthropic/claude-sonnet-4",
+  "messages": [
+    {
+      "role": "user",
+      "content": "How does the streaming pipeline work? Keep it short, with a code sample.",
+      "created_at": "2026-09-14T12:54:53Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's the short version.\n\n**Streaming** arrives token by token; the UI coalesces deltas to one paint per frame, so cost stays proportional to the *last* message rather than the whole transcript.\n\n```rust\npub fn push(&mut self, chunk: &[u8]) -> Vec<SseEvent> {\n    self.buf.extend_from_slice(chunk);\n    // split on blank lines, not on newlines\n}\n```\n\nA few things worth remembering:\n\n1. Sessions are plain JSON — `messages[]` is a replayable `{role, content}` list.\n2. Per-turn metadata (model, tokens, latency) lives on the assistant message.\n3. Keys live in a separate file, so exports never leak them.\n\n> The system prompt is copied into the session, so a trajectory is self-contained.\n\n| protocol | endpoint |\n|---|---|\n| chat | `/chat/completions` |\n| anthropic | `/messages` |\n| responses | `/responses` |\n\nThat's it — see [the README](https://example.com) for the schema.",
+      "created_at": "2026-09-14T12:54:53Z",
+      "reasoning_content": "The user wants a compact explanation. Lead with per-frame coalescing, then the schema.",
+      "meta": {
+        "provider_id": "openrouter",
+        "protocol": "chat",
+        "model": "anthropic/claude-sonnet-4",
+        "created_at": "2026-09-14T12:54:53Z",
+        "latency_ms": 1840,
+        "ttft_ms": 412,
+        "usage": {
+          "input_tokens": 1283,
+          "cached_input_tokens": 1024,
+          "output_tokens": 236
+        },
+        "finish_reason": "stop"
+      }
+    },
+    {
+      "role": "user",
+      "content": "And what happens on cancel?",
+      "created_at": "2026-09-14T12:54:53Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The stream is dropped, and whatever text already arrived is persisted with `finish_reason: \"cancelled\"` — so a truncated reply is still a faithful trajectory.",
+      "created_at": "2026-09-14T12:54:53Z",
+      "meta": {
+        "provider_id": "openrouter",
+        "protocol": "chat",
+        "model": "anthropic/claude-sonnet-4",
+        "created_at": "2026-09-14T12:54:53Z",
+        "latency_ms": 900,
+        "ttft_ms": 300,
+        "usage": {
+          "input_tokens": 1600,
+          "output_tokens": 41
+        },
+        "finish_reason": "stop"
+      }
+    }
+  ]
+}

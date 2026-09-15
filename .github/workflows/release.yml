@@ -1,0 +1,50 @@
+# Tag `vX.Y.Z` → universal macOS build, ad-hoc code signature, updater
+# artifacts signed with the Tauri key, GitHub Release with dmg + app.tar.gz +
+# .sig + latest.json (the updater feed) + a sha256 for install.sh.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: im ${{ github.ref_name }}
+          releaseBody: |
+            **Install:** `curl -fsSL https://raw.githubusercontent.com/yetlinghao/im/main/install.sh | sh`
+            or download the dmg below (first launch: System Settings → Privacy & Security → Open Anyway).
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --target universal-apple-darwin
+      - name: Upload checksum for install.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd src-tauri/target/universal-apple-darwin/release/bundle/macos
+          shasum -a 256 im.app.tar.gz > im.app.tar.gz.sha256
+          gh release upload "${{ github.ref_name }}" im.app.tar.gz.sha256 --clobber

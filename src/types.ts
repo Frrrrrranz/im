@@ -1,0 +1,116 @@
+// Mirrors src-tauri/src/model.rs. Field names are snake_case on the wire.
+
+export type Protocol = "chat" | "anthropic" | "responses";
+export type Role = "system" | "user" | "assistant";
+export type Appearance = "system" | "light" | "dark";
+
+export interface Usage {
+  /** The whole prompt for this call, cached part included. */
+  input_tokens?: number;
+  /** How much of `input_tokens` the provider served from its prompt cache. */
+  cached_input_tokens?: number;
+  output_tokens?: number;
+  reasoning_tokens?: number;
+}
+
+export interface TurnMeta {
+  provider_id: string;
+  protocol: Protocol;
+  model: string;
+  created_at: string;
+  latency_ms?: number;
+  ttft_ms?: number;
+  thinking_ms?: number;
+  usage?: Usage;
+  finish_reason?: string;
+  error?: string;
+}
+
+export interface Message {
+  role: Role;
+  content: string;
+  created_at?: string;
+  /** Chat-completions field name, so a stored trajectory replays as-is. */
+  reasoning_content?: string;
+  meta?: TurnMeta;
+}
+
+export interface Session {
+  schema_version: number;
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  provider_id: string;
+  model: string;
+  system?: string;
+  messages: Message[];
+}
+
+export interface SessionSummary {
+  id: string;
+  title: string;
+  updated_at: string;
+  provider_id: string;
+  model: string;
+  message_count: number;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  protocol: Protocol;
+  base_url: string;
+  models: string[];
+}
+
+export interface ProviderView extends Provider {
+  has_key: boolean;
+}
+
+export interface ProviderInput extends Provider {
+  /** undefined leaves the stored key alone; "" clears it. */
+  api_key?: string;
+}
+
+export interface Settings {
+  schema_version: number;
+  appearance: Appearance;
+  default_provider_id?: string;
+  default_model?: string;
+  system_prompt?: string;
+  max_tokens: number;
+  sidebar_visible: boolean;
+  /** Column widths in CSS px; absent = the stylesheet default. */
+  sidebar_width?: number;
+  inspector_visible: boolean;
+  inspector_width?: number;
+}
+
+export type TurnKind =
+  | { kind: "send"; session_id?: string | null; provider_id: string; model: string; content: string }
+  | { kind: "regenerate"; session_id: string }
+  | { kind: "edit"; session_id: string; content: string };
+
+export type TurnEvent =
+  | { type: "started"; session: Session }
+  | { type: "reasoning"; session_id: string; delta: string }
+  | { type: "text"; session_id: string; delta: string }
+  | { type: "done"; session_id: string; message?: Message; error?: string; updated_at: string };
+
+/** A newer build offered by the release feed, and how far along installing it is. */
+export interface UpdateState {
+  version: string;
+  notes?: string;
+  phase: "available" | "downloading" | "installing" | "failed";
+  /** 0–1 while downloading. */
+  progress?: number;
+  error?: string;
+}
+
+export interface ContextItem {
+  id?: string;
+  label?: string;
+  enabled?: boolean;
+  separator?: boolean;
+}

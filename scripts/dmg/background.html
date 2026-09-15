@@ -1,0 +1,69 @@
+<!doctype html>
+<!-- DMG installer background, 660×400 pt (rendered at 2× → 1320×800 px, tagged 144 dpi so Finder shows it at 1×).
+     Finder draws the app icon at (180, 220) and the Applications alias at (480, 220), 128 px each,
+     labels underneath — see bundle.macOS.dmg in src-tauri/tauri.conf.json. Keep the arrow between them.
+     The slogan's full stop is the app's accent dot (the "generating" indicator) — the one colour on the page.
+     Render: scripts/shot.sh file://$PWD/scripts/dmg/background.html src-tauri/dmg/background.png 660x400 \
+               --proxy-server=direct:// && sips -s dpiWidth 144 -s dpiHeight 144 src-tauri/dmg/background.png -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 660px;
+        height: 400px;
+        background: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        overflow: hidden;
+      }
+      .slogan {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 74px;
+        text-align: center;
+        font-size: 44px;
+        line-height: 1;
+        font-weight: 500;
+        letter-spacing: -0.028em;
+        color: rgba(0, 0, 0, 0.88);
+      }
+      .slogan .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        margin-left: 5px;
+        border-radius: 50%;
+        background: #007aff;
+        vertical-align: 0;
+      }
+      .arrow {
+        position: absolute;
+        left: 284px;
+        top: 213px;
+        color: rgba(0, 0, 0, 0.2);
+      }
+      .hint {
+        /* just above the arrow: Finder may clip the bottom of the window, so nothing lives down there */
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 188px;
+        text-align: center;
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        color: rgba(0, 0, 0, 0.28);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="slogan">just chat<span class="dot"></span></div>
+    <svg class="arrow" viewBox="0 0 92 14" width="92" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 7h86M82 2l6 5-6 5" />
+    </svg>
+    <div class="hint">drag to install</div>
+  </body>
+</html>
