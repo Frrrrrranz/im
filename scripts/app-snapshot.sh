@@ -11,6 +11,11 @@
 #   INSPECTOR=1                                         start with the trajectory inspector open
 #   IM_SNAPSHOT_DELAY_MS=3000                           wait before capturing
 #   ACTIVATE=0                                          don't bring the app to the front first (inactive look)
+#   IM_QUICK=1 IM_SNAPSHOT_WINDOW=quick                 summon the quick-input panel and capture *it*
+#   IM_QUICK_SELECTION="text"                           …quoting this instead of reading the real selection
+#   IM_QUICK_SEND="text" / IM_QUICK_ESC=1               …then type this and press Return / press Esc
+#                                                       (capture the main window with IM_SNAPSHOT_DELAY_MS=6000
+#                                                       to see the chat it started)
 # Requires `npx tauri build --debug --bundles app`. The app renders the PNG
 # itself (src-tauri/src/snapshot.rs); screencapture is unavailable here.
 set -eu

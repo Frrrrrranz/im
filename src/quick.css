@@ -1,0 +1,107 @@
+/* The quick-input panel. The window is exactly the card; the glass is the
+   window's own vibrancy (Rust), so nothing here paints a background — the
+   card only clips its corners to the same radius. Tokens and the field's
+   pieces (.input, .send) come from the main stylesheet. */
+
+@import "./styles.css";
+
+:root {
+  --quick-radius: 14px;
+  --quick-w: 520px;
+}
+
+html,
+body {
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#quick {
+  width: var(--quick-w);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: var(--quick-w);
+  padding: 10px 10px 10px 16px;
+  border-radius: var(--quick-radius);
+  overflow: hidden;
+}
+
+/* What the panel was summoned over. Three lines at most; × on hover drops it. */
+.quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 0 4px;
+  padding: 1px 0 1px 10px;
+  border-left: 2px solid var(--tertiary);
+  color: var(--secondary);
+  font-size: var(--ui);
+  line-height: 1.4;
+}
+.quote-text {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.quote-remove {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--secondary);
+  visibility: hidden;
+}
+.quote-remove svg {
+  width: 10px;
+  height: 10px;
+}
+.quote:hover .quote-remove,
+.quote-remove:focus-visible {
+  visibility: visible;
+}
+.quote-remove:hover {
+  background: var(--fill);
+  color: var(--label);
+}
+
+.field-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.card .input {
+  min-height: 28px;
+  max-height: none;
+  padding: 3px 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+.card .send {
+  margin-bottom: 1px;
+}
+
+/* Outside Tauri there is no vibrancy: stand in for the material and a desktop behind it. */
+html.mock body {
+  min-height: 100vh;
+  padding: 24px;
+  background: light-dark(linear-gradient(135deg, #d7e3f4, #f3e2d0), linear-gradient(135deg, #2b3446, #4a3a3a));
+}
+html.mock .card {
+  background: light-dark(rgba(246, 246, 248, 0.82), rgba(40, 40, 44, 0.82));
+  box-shadow: light-dark(0 12px 40px rgba(0, 0, 0, 0.22), 0 12px 40px rgba(0, 0, 0, 0.6));
+  backdrop-filter: blur(30px) saturate(1.6);
+}

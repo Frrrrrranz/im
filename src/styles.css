@@ -689,6 +689,17 @@ body.resizing .resizer.column-handle::after {
 .bubble p {
   margin: 0;
 }
+/* The selection a message was asked about (quick-input panel): a quote above the text. */
+.bubble blockquote {
+  margin: 2px 0 6px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--tertiary);
+  color: var(--secondary);
+  font-size: var(--ui);
+}
+.bubble blockquote:last-child {
+  margin-bottom: 2px;
+}
 /* Images sent with a message sit above its bubble; click one to enlarge. */
 .turn.user .images {
   display: flex;
@@ -1522,8 +1533,29 @@ body.dropping .field {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.srow-value.err {
+.srow-value.err,
+.srow-note.err {
   color: var(--red);
+}
+/* Shortcut recorder: reads as a key cap; click and press the new keys. */
+.shortcut {
+  min-width: 72px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--separator);
+  border-radius: 6px;
+  background: var(--field);
+  font-size: var(--ui);
+  color: var(--label);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.shortcut:hover {
+  background: var(--fill);
+}
+.shortcut.recording {
+  border-color: var(--accent);
+  color: var(--secondary);
 }
 .mono {
   font-family: var(--mono);

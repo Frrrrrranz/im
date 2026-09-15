@@ -33,8 +33,10 @@ pub fn apply_appearance(app: &AppHandle, appearance: Appearance) {
             let _ = item.set_checked(*a == appearance);
         }
     }
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.set_theme(theme_for(appearance));
+    for label in ["main", crate::quick::WINDOW] {
+        if let Some(w) = app.get_webview_window(label) {
+            let _ = w.set_theme(theme_for(appearance));
+        }
     }
 }
 

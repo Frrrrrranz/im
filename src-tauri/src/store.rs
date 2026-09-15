@@ -49,11 +49,16 @@ pub fn new_id() -> String {
 }
 
 /// First line of the first user message, trimmed to a sidebar-sized title.
+/// The first line of the message — preferring what was typed over a quoted
+/// selection (`> …`, as the quick-input panel writes it), and stripping the
+/// quote marker when the quote is all there is.
 pub fn title_from(content: &str) -> String {
-    let line = content
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty())
+    let lines = content.lines().map(str::trim).filter(|l| !l.is_empty());
+    let line = lines
+        .clone()
+        .find(|l| !l.starts_with('>'))
+        .or_else(|| lines.clone().next().map(|l| l.trim_start_matches('>').trim_start()))
+        .filter(|l| !l.is_empty())
         .unwrap_or("New chat");
     let mut title: String = line.chars().take(60).collect();
     if line.chars().count() > 60 {
@@ -416,6 +421,9 @@ mod tests {
     fn titles_and_ids() {
         assert_eq!(title_from("\n\n  Hello world  \nmore"), "Hello world");
         assert_eq!(title_from(""), "New chat");
+        assert_eq!(title_from("> quoted line\n> second\n\nWhat does it mean?"), "What does it mean?");
+        assert_eq!(title_from("> quoted line\n> second"), "quoted line");
+        assert_eq!(title_from(">"), "New chat");
         let long = "x".repeat(100);
         assert_eq!(title_from(&long).chars().count(), 61);
         assert!(valid_id(&new_id()));

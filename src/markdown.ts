@@ -151,10 +151,21 @@ function isCodeBlock(n: Node): n is HTMLElement {
   return n instanceof HTMLElement && n.tagName === "PRE" && n.classList.contains("code");
 }
 
+/** A user message: verbatim, except that a leading `> …` block — what the
+ *  quick-input panel writes for a selection — shows as the quote it is. */
 export function plainText(text: string): DocumentFragment {
   const frag = document.createDocumentFragment();
-  const p = document.createElement("p");
-  p.textContent = text;
-  frag.appendChild(p);
+  const quoted = /^((?:>.*(?:\n|$))+)\n*([\s\S]*)$/.exec(text);
+  if (quoted) {
+    const quote = document.createElement("blockquote");
+    quote.textContent = quoted[1]!.trimEnd().split("\n").map((line) => line.replace(/^> ?/, "")).join("\n");
+    frag.appendChild(quote);
+    text = quoted[2]!;
+  }
+  if (text || !quoted) {
+    const p = document.createElement("p");
+    p.textContent = text;
+    frag.appendChild(p);
+  }
   return frag;
 }

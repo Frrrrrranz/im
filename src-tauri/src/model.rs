@@ -281,6 +281,10 @@ pub struct Settings {
     /// Width of the transcript/composer column in CSS px; absent = the stylesheet default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub column_width: Option<u32>,
+    /// System-wide shortcut that summons the quick-input panel, in accelerator
+    /// syntax (`Alt+Space`, `Super+Shift+KeyK`). Empty = off.
+    #[serde(default = "default_quick_shortcut")]
+    pub quick_shortcut: String,
 }
 
 fn default_max_tokens() -> u32 {
@@ -288,6 +292,9 @@ fn default_max_tokens() -> u32 {
 }
 fn default_true() -> bool {
     true
+}
+pub fn default_quick_shortcut() -> String {
+    "Alt+Space".into()
 }
 
 impl Default for Settings {
@@ -304,6 +311,7 @@ impl Default for Settings {
             inspector_visible: false,
             inspector_width: None,
             column_width: None,
+            quick_shortcut: default_quick_shortcut(),
         }
     }
 }

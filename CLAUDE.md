@@ -49,6 +49,7 @@ UI, use both after any view change:
 - `scripts/snapshot.sh` runs the frontend against the in-memory mock backend
   (`src/api.ts`, active whenever `__TAURI_INTERNALS__` is missing) in headless
   Chrome. `?state=chat|streaming|picker|settings|empty|noproviders|error|edit|nosidebar|json|scrolled|resized|html|html-expanded|streaming-html|svg|image|image-expanded|attach|select-test`
+  (`quick.html?state=empty|typed|long` is the quick-input panel's page)
   (iframes need `--virtual-time-budget=3000` on the shot to have loaded)
   and `?theme=light|dark` pick the scenario; `&inspector=1` opens the right
   column (`collapse` toggles the sidebar in 4s slow motion so a
@@ -69,7 +70,8 @@ UI, use both after any view change:
   the capture (`ACTIVATE=0` to see the inactive look) — it steals focus, so
   don't type while a snapshot runs.
 - Webview `console.error/warn` and uncaught errors are forwarded to the Rust
-  log (`log_message` command); run with `RUST_LOG=im=debug,webview=debug`.
+  log (`log_message` command); run with `RUST_LOG=im_lib=debug,webview=debug`
+  (the crate is `im_lib`, so `im=…` matches only by prefix).
 
 ## Architecture
 
@@ -82,7 +84,11 @@ src-tauri/src/
   engine.rs     a turn: mutate session → stream → accumulate → persist once → emit TurnEvent. Cancellation tokens per session.
   lib.rs        Tauri commands (thin), plugins, vibrancy, window theme
   menu.rs       native menu bar + context menu popup; every click is emitted as a `menu` event with its id
-  snapshot.rs   debug-only self-screenshot
+  quick.rs      the quick-input panel: global shortcut (tauri-plugin-global-shortcut), the `quick` window turned
+                into a non-activating NSPanel (class swap, tauri-nspanel style), Popover vibrancy r=14, placement by
+                the mouse in AppKit points, alpha fade via NSAnimationContext, selection via Accessibility
+                (AXFocusedUIElement → AXSelectedText). Commands quick_ready/present/resize/dismiss/submit/access
+  snapshot.rs   debug-only self-screenshot (`IM_SNAPSHOT_WINDOW=quick` captures the panel)
 src/
   api.ts        Backend interface: Tauri (invoke/Channel) or the in-memory mock. The only host boundary.
   state.ts      one store; `appendLive` coalesces deltas to one publish per animation frame
@@ -123,6 +129,12 @@ src/
                 `node scripts/eval.mjs "…?state=html-expanded&click=1200&close=1200&frames=1" 3600` (it echoes
                 the page's console.warn lines); a cold headless run needs ~1s before the inline pane has
                 rendered, so never click at 600ms and call the white pane a bug
+  quick.ts      the panel's page (quick.html, its own Vite entry, quick.css imports styles.css): quote of the
+                selection (3-line clamp, × on hover) + growing field + send. It lays out, measures and reports
+                (`quick_present` with the height — Rust sizes/places/fades the window only then, so no stale
+                frame), Return → `quick_submit`, Esc → `quick_dismiss(restore=true)`, blur → restore=false.
+                Browser: `quick.html?state=empty|typed|long&theme=dark`
+  shortcut.ts   accelerator strings ("Alt+Space") ↔ glyphs (⌥ Space) and ↔ KeyboardEvent (e.code names)
   markdown.ts   marked + DOMPurify → fragment. Code block anatomy: `pre.code > (.code-preview?) .code-body >
                 (.code-bar, .code-row > (.gutter?, .code-scroll > code))` — the gutter is a real flex column and
                 only `.code-scroll` scrolls, so long lines never pass under the numbers. The preview pane stays at
@@ -250,6 +262,33 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
   behaviour and transitions can't be observed with `shot.sh`; `eval.mjs … shot:out.png`
   screenshots in real time.) `attachPreview` skips HTML with an unclosed
   `<style>`/`<script>` (the parser would blank the page until it closes).
+- Quick input (`quick.rs` + `quick.ts`): `settings.quick_shortcut` (default
+  `Alt+Space`, "" = off; Settings → General has a recorder, ⌫ = off) summons a
+  520px glass panel next to the mouse; the text selected in the front app comes
+  along as a quote and the message goes out as a markdown `> …` block plus the
+  typed text (no schema change; `plainText` renders a leading `>` block as a
+  quote, `title_from` skips it). Return hides the panel, shows the main window
+  and emits `quick:send` → `actions.quickSend` (new chat + send; with no model
+  it seeds the composer and opens the picker). Facts that cost time to learn:
+  (1) on a regular (Dock-icon) app, *programmatic* `makeKeyWindow` activates
+  the app even for a non-activating NSPanel — the mask only covers clicks;
+  tauri-nspanel's demos are Accessory apps. Activation does not raise the main
+  window (checked via the on-screen window order), so we accept it and hand
+  activation back to the previously frontmost pid on Esc/shortcut dismissal
+  (`activateWithOptions`); a click elsewhere passes `restore=false`. Don't use
+  `makeKeyAndOrderFront` or tao's `set_focus` there. (2) A `quick:show` emitted
+  before the panel's page listens is lost, so the page calls `quick_ready` and
+  a summon before that is held. (3) Reading the selection needs Accessibility
+  (`AXIsProcessTrusted`); Settings → General → Quote selection has the prompt
+  button. Ad-hoc signing means the grant is per build. AX-only: apps that don't
+  expose `AXSelectedText` (some Electron editors) give no quote; there is no
+  ⌘C fallback on purpose (VS Code copies the whole line when nothing is
+  selected). (4) A rejected shortcut (taken by another app) is not saved:
+  `save_settings` keeps the old one and returns the error; the row shows it.
+  Test: `IM_QUICK=1 IM_QUICK_SELECTION=… IM_SNAPSHOT_WINDOW=quick
+  scripts/app-snapshot.sh` (panel), `+IM_QUICK_SEND=… PROVIDER=mock
+  IM_SNAPSHOT_DELAY_MS=6000` (the chat it starts), `IM_QUICK_ESC=1` (hand-back;
+  `RUST_LOG=im_lib=debug` logs the front pid before/after).
 - The HTML preview iframes are `sandbox="allow-scripts allow-forms allow-modals
   allow-popups"` (no `allow-same-origin`) on `blob:` URLs — an opaque origin
   with no IPC; srcdoc would inherit our CSP and block the page's own scripts.

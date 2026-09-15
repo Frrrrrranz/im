@@ -5,6 +5,7 @@ pub mod engine;
 pub mod llm;
 mod menu;
 pub mod model;
+mod quick;
 #[cfg(all(debug_assertions, target_os = "macos"))]
 mod snapshot;
 pub mod sse;
@@ -162,11 +163,29 @@ fn get_settings(engine: State<'_, Arc<Engine>>) -> Cmd<Settings> {
     engine.store().settings().map_err(err)
 }
 
+/// A shortcut that can't be registered (malformed, or owned by another app) is
+/// not kept: the previous one stays in force and the error goes back to the UI.
 #[tauri::command]
 fn save_settings(app: AppHandle, engine: State<'_, Arc<Engine>>, settings: Settings) -> Cmd<()> {
-    engine.store().save_settings(&settings).map_err(err)?;
+    let store = engine.store();
+    let previous = store.settings().map(|s| s.quick_shortcut).unwrap_or_default();
+    let mut settings = settings;
+    let mut rejected = None;
+    if settings.quick_shortcut != previous {
+        if let Err(e) = quick::set_shortcut(&app, &settings.quick_shortcut) {
+            rejected = Some(format!("{}: {e}", settings.quick_shortcut));
+            settings.quick_shortcut = previous.clone();
+            if let Err(e) = quick::set_shortcut(&app, &previous) {
+                log::warn!("quick shortcut {previous:?} not restored: {e}");
+            }
+        }
+    }
+    store.save_settings(&settings).map_err(err)?;
     menu::apply_appearance(&app, settings.appearance);
-    Ok(())
+    match rejected {
+        Some(msg) => Err(msg),
+        None => Ok(()),
+    }
 }
 
 #[tauri::command]
@@ -221,6 +240,9 @@ fn debug_scenario() -> serde_json::Value {
             "attach": std::env::var("IM_ATTACH").ok(),
             // Scenario switches, URL-query style (`click=1200&close=1500&frames=1`); the browser reads location.search.
             "query": std::env::var("IM_QUERY").ok(),
+            // With IM_QUICK=1: the panel types this and presses Return once it is up; IM_QUICK_ESC=1 presses Esc instead.
+            "quick_send": std::env::var("IM_QUICK_SEND").ok(),
+            "quick_esc": std::env::var("IM_QUICK_ESC").map(|v| v == "1").unwrap_or(false),
         })
     }
     #[cfg(not(debug_assertions))]
@@ -251,6 +273,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(quick::plugin())
         .setup(|app| {
             let root = data_root(app.handle())?;
             let store = Store::new(root)?;
@@ -300,6 +323,10 @@ pub fn run() {
                     }
                 });
             }
+            quick::install(app.handle(), &settings.quick_shortcut);
+            if let Some(q) = app.get_webview_window(quick::WINDOW) {
+                let _ = q.set_theme(menu::theme_for(settings.appearance));
+            }
             #[cfg(all(debug_assertions, target_os = "macos"))]
             snapshot::install(app.handle());
             Ok(())
@@ -327,6 +354,13 @@ pub fn run() {
             read_image,
             log_message,
             debug_scenario,
+            quick::quick_ready,
+            quick::quick_present,
+            quick::quick_resize,
+            quick::quick_dismiss,
+            quick::quick_submit,
+            quick::quick_access,
+            quick::quick_request_access,
         ])
         .build(tauri::generate_context!())
         .expect("error while building im")

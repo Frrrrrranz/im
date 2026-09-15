@@ -7,6 +7,7 @@ import type { Backend } from "../api";
 import * as actions from "../actions";
 import { h, replaceChildren } from "../dom";
 import { PROTOCOLS } from "../presets";
+import { prettyShortcut, shortcutFromEvent } from "../shortcut";
 import { store, type State } from "../state";
 import type { Appearance, Protocol, ProviderView } from "../types";
 
@@ -116,7 +117,7 @@ export function createSettings(backend: Backend): HTMLElement {
     const prompt = h("textarea", { class: "sfield area", rows: 3, placeholder: "Copied into every new chat as its system prompt.", value: settings.system_prompt ?? "" }) as HTMLTextAreaElement;
     prompt.addEventListener("change", () => void actions.saveSettings({ ...store.state.settings, system_prompt: prompt.value.trim() || undefined }));
     versionEl = versionRow();
-    replaceChildren(general, versionEl, srow("Appearance", seg), srow("System prompt", null, undefined, prompt));
+    replaceChildren(general, versionEl, srow("Appearance", seg), shortcutRow(), accessRow(backend), srow("System prompt", null, undefined, prompt));
   };
 
   const renderData = async () => {
@@ -172,6 +173,71 @@ function srow(label: string, control: HTMLElement | null, note?: string, block?:
 
 function tbtn(label: string, onClick: () => void, danger = false): HTMLButtonElement {
   return h("button", { class: `tbtn${danger ? " danger" : ""}`, type: "button", onclick: onClick }, label) as HTMLButtonElement;
+}
+
+/** "Quick input · ⌥ Space": click the shortcut, press the new keys; ⌫ turns it off,
+ *  Esc keeps the old one. A combination the OS refuses is reported under the label. */
+function shortcutRow(): HTMLElement {
+  const field = h("button", { class: "shortcut", type: "button", title: "Click, then press the new keys. Delete turns it off." }, prettyShortcut(store.state.settings.quick_shortcut)) as HTMLButtonElement;
+  const note = h("div", { class: "srow-note" }, "Summons a small input anywhere; text selected in the front app comes along as a quote.");
+  let recording = false;
+  const paint = () => {
+    field.textContent = recording ? "Press keys…" : prettyShortcut(store.state.settings.quick_shortcut);
+    field.classList.toggle("recording", recording);
+  };
+  const stop = () => {
+    recording = false;
+    window.removeEventListener("keydown", onKey, true);
+    field.removeEventListener("blur", stop);
+    paint();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape") return stop();
+    const accel = e.key === "Backspace" || e.key === "Delete" ? "" : shortcutFromEvent(e);
+    if (accel === null) return; // a modifier on its own: keep waiting for the key
+    stop();
+    field.textContent = prettyShortcut(accel);
+    void actions.setQuickShortcut(accel).then((err) => {
+      paint();
+      note.textContent = err ? `Couldn't register ${prettyShortcut(accel)} — is another app using it?` : "Summons a small input anywhere; text selected in the front app comes along as a quote.";
+      note.classList.toggle("err", !!err);
+      if (err) console.warn(err);
+    });
+  };
+  field.addEventListener("click", () => {
+    if (recording) return stop();
+    recording = true;
+    paint();
+    window.addEventListener("keydown", onKey, true);
+    field.addEventListener("blur", stop);
+  });
+  return h("div", { class: "srow" }, h("div", { class: "srow-label" }, "Quick input", note), h("div", { class: "srow-control" }, field));
+}
+
+/** Reading the selection in other apps needs Accessibility access; the button asks for it. */
+function accessRow(backend: Backend): HTMLElement {
+  const control = h("div", { class: "srow-inline" });
+  let polling = 0;
+  const paint = (granted: boolean) => {
+    replaceChildren(control, granted ? h("span", { class: "srow-value" }, "Allowed") : tbtn("Allow…", () => void request()));
+  };
+  const check = () => backend.quickAccess().then(paint);
+  const request = async () => {
+    await backend.requestQuickAccess();
+    // The user is off in System Settings; notice when they come back with it on.
+    clearInterval(polling);
+    let tries = 0;
+    polling = window.setInterval(() => {
+      void backend.quickAccess().then((ok) => {
+        if (ok || ++tries > 90 || store.state.view !== "settings") clearInterval(polling);
+        if (ok) paint(true);
+      });
+    }, 1000);
+  };
+  void check();
+  return srow("Quote selection", control, "Reading what is selected in other apps needs Accessibility access.");
 }
 
 interface ProviderCard {

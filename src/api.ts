@@ -41,6 +41,12 @@ export interface Backend {
 
   popupMenu(items: ContextItem[]): Promise<void>;
   onMenu(cb: (id: string) => void): Promise<() => void>;
+  /** Text handed over by the quick-input panel (Return there): open a new chat with it. */
+  onQuick(cb: (text: string) => void): Promise<() => void>;
+  /** Whether the panel may read the selection in other apps (macOS Accessibility access). */
+  quickAccess(): Promise<boolean>;
+  /** Ask for that access; the OS shows its own prompt. */
+  requestQuickAccess(): Promise<boolean>;
   /** Native file chooser, images only; the chosen files' bytes. */
   pickImages(): Promise<ImageSource[]>;
   /** Image files dragged onto the window; `hover` tracks whether one is over it right now. */
@@ -107,6 +113,9 @@ async function tauriBackend(): Promise<Backend> {
 
     popupMenu: (items) => invoke("popup_menu", { items }),
     onMenu: (cb) => listen<string>("menu", (e) => cb(e.payload)),
+    onQuick: (cb) => listen<string>("quick:send", (e) => cb(e.payload)),
+    quickAccess: () => invoke("quick_access"),
+    requestQuickAccess: () => invoke("quick_request_access"),
     pickImages: async () => {
       const picked = await open({ multiple: true, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "avif", "bmp", "tiff", "tif"] }] });
       return readImages(Array.isArray(picked) ? picked : picked ? [picked] : []);
@@ -268,7 +277,9 @@ function mockBackend(): Backend {
     inspector_visible: state === "json" || params.get("inspector") === "1",
     default_provider_id: "openrouter",
     default_model: "anthropic/claude-sonnet-4",
+    quick_shortcut: "Alt+Space",
   };
+  let quickAccess = params.has("access");
   let providers: ProviderView[] =
     state === "noproviders"
       ? []
@@ -483,6 +494,14 @@ function mockBackend(): Backend {
       menuCb = cb;
       return () => (menuCb = null);
     },
+    // `?quick=<text>` plays the panel's hand-over shortly after launch.
+    onQuick: async (cb) => {
+      const text = params.get("quick");
+      if (text) setTimeout(() => cb(text), 300);
+      return () => {};
+    },
+    quickAccess: async () => quickAccess,
+    requestQuickAccess: async () => (quickAccess = true),
     pickImages: () =>
       new Promise((resolve) => {
         const input = document.createElement("input");

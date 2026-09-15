@@ -41,10 +41,25 @@ reply streams the
 view follows it only as long as you stay at the bottom; scroll up and it stays
 put, with a small **↓** above the composer to jump back.
 
+### Quick input
+
+**⌥ Space** anywhere on the Mac brings up a small glass field next to the
+mouse. If text is selected in the app you are in, it is already there as a
+quote; type the question (or nothing — the quote alone is fine), press
+**Return**, and im's window comes up with a new chat under way. **Esc** puts
+the field away and returns you to what you were doing; clicking anywhere else
+does the same. Change or turn off the shortcut under **Settings → General →
+Quick input** (click the key cap, press the new keys; ⌫ turns it off). Reading
+the selection needs **Accessibility** access — **Settings → General → Quote
+selection → Allow…** asks for it; the app is re-signed on every update, so
+macOS may ask again after one. Apps that don't expose their selection to
+Accessibility (some Electron editors) give no quote; the field still works.
+
 ### Keyboard
 
 | Shortcut | Action |
 |---|---|
+| ⌥ Space (anywhere) | Quick input |
 | ⌘N | New chat |
 | ⌘⇧A | Attach image (or paste / drop one) |
 | ⌘K | Choose model |
@@ -91,7 +106,7 @@ Everything lives in `~/Library/Application Support/im/` (**File → Show Data
 Folder**). Set `IM_DATA_DIR` to use another location.
 
 ```text
-settings.json          appearance, default model, system prompt, column widths
+settings.json          appearance, default model, system prompt, column widths, quick_shortcut
 providers.json         endpoints + model lists      (no secrets)
 keys.json              { "<provider id>": "<api key>" }   mode 0600
 sessions/<ulid>.json   one chat per file
@@ -139,6 +154,9 @@ Design rules for the schema:
   `role` and `content` and you have a training trajectory. The system prompt
   is a top-level `system` field, copied into the session when it is created so
   the file is self-contained.
+- A message from the quick-input panel is a plain string too: the selection as
+  a markdown quote (`> …` lines), a blank line, then what was typed. The
+  transcript shows the quote as a quote; the model sees ordinary markdown.
 - A user message with images has `content` as a list of parts in the Chat
   Completions shape — `{"type": "text", "text": …}` and
   `{"type": "image_url", "image_url": {"url": "data:image/png;base64,…"}}` —

@@ -244,6 +244,18 @@ export function typeAndSend(text: string) {
   composer?.submit();
 }
 
+/** Return in the quick-input panel: a new chat with `text`, sent at once. With
+ *  no model to send to, the text waits in the composer while the picker opens. */
+export function quickSend(text: string) {
+  if (!text.trim()) return;
+  newChat();
+  if (canSend()) void send(text);
+  else {
+    composer?.seed(text, []);
+    togglePicker(true);
+  }
+}
+
 export async function regenerate() {
   const { currentId, session } = store.state;
   if (!currentId || !session || store.isStreaming(currentId)) return;
@@ -369,6 +381,19 @@ export async function saveSettings(settings: typeof store.state.settings) {
 
 export async function setAppearance(a: Appearance) {
   await saveSettings({ ...store.state.settings, appearance: a });
+}
+
+/** The quick panel's shortcut ("" = off). The backend refuses one it can't
+ *  register (malformed, or owned by another app) and keeps the old one; the
+ *  reason comes back for the settings row. */
+export async function setQuickShortcut(shortcut: string): Promise<string | null> {
+  try {
+    await saveSettings({ ...store.state.settings, quick_shortcut: shortcut });
+    return null;
+  } catch (e) {
+    store.set({ settings: await backend.getSettings().catch(() => store.state.settings) });
+    return String(e);
+  }
 }
 
 export async function exportCurrent() {

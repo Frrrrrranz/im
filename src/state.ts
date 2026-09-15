@@ -43,7 +43,7 @@ class Store {
     session: null,
     draft: null,
     providers: [],
-    settings: { schema_version: 1, appearance: "system", max_tokens: 8192, sidebar_visible: true, inspector_visible: false },
+    settings: { schema_version: 1, appearance: "system", max_tokens: 8192, sidebar_visible: true, inspector_visible: false, quick_shortcut: "Alt+Space" },
     live: {},
     errors: {},
     view: "chat",

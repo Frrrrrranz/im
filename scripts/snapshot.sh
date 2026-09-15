@@ -33,3 +33,7 @@ shot image-light     "$base?state=image&theme=light"
 shot image-expanded-dark "$base?state=image-expanded&theme=dark"
 shot attach-dark     "$base?state=attach&theme=dark"
 shot settings-dark   "$base?state=settings&theme=dark" 1100x1500
+# The quick-input panel's page (its own window in the app): empty, with a quote + typed text, long quote.
+shot quick-light     "${base}quick.html?state=empty&theme=light" 600x200
+shot quick-typed-light "${base}quick.html?state=typed&theme=light" 600x260
+shot quick-long-dark "${base}quick.html?state=long&theme=dark" 600x260

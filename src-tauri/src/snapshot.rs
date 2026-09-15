@@ -1,8 +1,10 @@
 //! Debug-only: render our own window to a PNG so the UI can be inspected from
 //! a terminal that cannot take screenshots. Triggered by `IM_SNAPSHOT_PATH`;
 //! `IM_SNAPSHOT_DELAY_MS` (default 2500) waits for the webview to settle and
-//! `IM_SNAPSHOT_EXIT=1` quits afterwards. Captures everything on screen below
-//! the window too, so translucent materials show what they actually blur.
+//! `IM_SNAPSHOT_EXIT=1` quits afterwards; `IM_SNAPSHOT_WINDOW=quick` captures
+//! the quick-input panel instead of the main window. Captures everything on
+//! screen below the window too, so translucent materials show what they
+//! actually blur.
 
 use std::ffi::{c_char, c_void, CString};
 use std::path::Path;
@@ -112,10 +114,11 @@ pub fn install(app: &tauri::AppHandle) {
     let Some(path) = std::env::var_os("IM_SNAPSHOT_PATH") else { return };
     let delay = std::env::var("IM_SNAPSHOT_DELAY_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(2500u64);
     let exit = std::env::var("IM_SNAPSHOT_EXIT").map(|v| v == "1").unwrap_or(false);
+    let label = std::env::var("IM_SNAPSHOT_WINDOW").unwrap_or_else(|_| "main".into());
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
-        let Some(window) = app.get_webview_window("main") else { return };
+        let Some(window) = app.get_webview_window(&label) else { return };
         if !window.is_visible().unwrap_or(false) {
             eprintln!("snapshot: window was still hidden (frontend never called show()) — forcing it visible");
             let _ = window.show();

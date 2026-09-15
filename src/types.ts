@@ -93,6 +93,8 @@ export interface Settings {
   inspector_width?: number;
   /** Width of the transcript/composer column in CSS px. */
   column_width?: number;
+  /** System-wide shortcut for the quick-input panel, accelerator syntax (`Alt+Space`); "" = off. */
+  quick_shortcut: string;
 }
 
 export type TurnKind =

@@ -72,6 +72,7 @@ async function main() {
   });
 
   await backend.onMenu(actions.handleMenu);
+  await backend.onQuick(actions.quickSend);
   // Image files dropped anywhere on the window land in the composer.
   await backend.onDrop(
     (files) => void actions.attachImages(files),
