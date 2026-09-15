@@ -35,8 +35,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: im ${{ github.ref_name }}
           releaseBody: |
-            **Install:** `curl -fsSL https://im.linghaoz.com/install.sh | sh`
-            or download the dmg below (first launch: System Settings → Privacy & Security → Open Anyway).
+            **Install:** `curl -fsSL https://im.linghaoz.com/install.sh | sh` — installed copies update themselves.
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true

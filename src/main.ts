@@ -72,7 +72,10 @@ async function main() {
   const scenario = await backend.scenario().catch(() => null);
   if (scenario) applyScenario(scenario);
   // A quiet look at the release feed once the UI is up; the gear gets a dot if there is something.
-  if (isTauri || new URLSearchParams(location.search).has("update")) setTimeout(() => void actions.checkForUpdates(), isTauri ? 4000 : 300);
+  if (isTauri || new URLSearchParams(location.search).has("update")) {
+    setTimeout(() => void actions.checkForUpdates(), isTauri ? 4000 : 300);
+    setInterval(() => void actions.checkForUpdates(), 6 * 60 * 60 * 1000);
+  }
 }
 
 /** Drives the UI into a screenshot-able state (scripts/snapshot.sh, scripts/app-snapshot.sh). */

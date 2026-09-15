@@ -14,7 +14,7 @@ npm run dev &  scripts/snapshot.sh            # frontend states via headless Chr
 scripts/app-snapshot.sh out.png [light|dark]  # the REAL app renders its own window to PNG
 swiftc -O -o build/icon scripts/icon.swift && build/icon logo.PNG src-tauri/icons/source.png \
   && npx tauri icon src-tauri/icons/source.png -o /tmp/icons  # app icon from the logo; copy the mac/win files back
-npm run tauri build                           # release .app + .dmg (ad-hoc signed unless APPLE_SIGNING_IDENTITY is set)
+npm run tauri build                           # release .app + updater archive (ad-hoc signed; no dmg by design)
 git tag vX.Y.Z && git push origin vX.Y.Z      # GitHub Actions builds, signs the updater archive and publishes the Release
 ```
 
@@ -23,20 +23,17 @@ GitHub Pages at im.linghaoz.com (`.github/workflows/pages.yml`, custom domain se
 via the Pages API; DNS is a CNAME to yetlinghao.github.io). `install.sh` (repo
 root, copied into the site at deploy) is the primary install path: no
 quarantine flag → no Gatekeeper. The page is deliberately just icon, slogan,
-one line, the command, a dmg link — the user vetoed screenshots. The updater
+one line, the command — the user vetoed screenshots and a dmg link. The updater
 (`tauri-plugin-updater`) polls `releases/latest/download/latest.json`; its
 public key is in `tauri.conf.json`, the private key is `~/.tauri/im.key` on
 the user's Mac and the `TAURI_SIGNING_PRIVATE_KEY` repo secret — never in the
-repo. Frontend: `actions.checkForUpdates/installUpdate`, `state.update`, the
-Version row in Settings → General, the dot on the gear, `im → Check for
-Updates…`. Mock: `?update=1` fakes a 0.2.0 in the feed.
-
-The DMG page is `scripts/dmg/background.html` (660×400 pt, slogan "just chat"
-with the accent dot as its full stop, thin arrow, "drag to install"); render it
-with the command in its header comment → `src-tauri/dmg/background.png` (2×,
-tagged 144 dpi so Finder scales it). Icon spots (180,220)/(480,220) are in
-`bundle.macOS.dmg`; move both together if the artwork changes. Check the result
-by mounting the dmg (`hdiutil attach`) — Finder itself can't be screenshotted here.
+repo. Frontend: `actions.checkForUpdates/installUpdate`, `state.update`; the only
+unprompted surface is one line at the foot of the sidebar (`.update-row`,
+"Update to 0.2.0" → "Downloading… 42%" → relaunch) that exists only while an
+update is waiting; Settings → General → Version and `im → Check for Updates…`
+are the manual paths. No dialogs, no badges. There is no dmg any more
+(`bundle.targets = ["app"]`): install.sh is the only install path, by the
+user's decision. Mock: `?update=1` fakes a 0.2.0 in the feed.
 
 This terminal cannot take screenshots or send keystrokes. Two ways to see the
 UI, use both after any view change:

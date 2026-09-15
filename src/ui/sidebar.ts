@@ -10,18 +10,32 @@ export function createSidebar(): HTMLElement {
     icon("compose"),
     h("span", { class: "nav-label" }, "New Chat"),
   );
+  // Appears only while an update is waiting: one dot, one line, one verb.
+  const updateRow = h("button", { class: "update-row", hidden: true, onclick: () => void actions.installUpdate() }, h("span", { class: "dot" }), h("span", { class: "update-text" }));
   const inner = h(
     "div",
     { class: "sidebar-inner" },
     h("div", { class: "sidebar-head", "data-tauri-drag-region": "" }),
     h("div", { class: "nav" }, newChat),
     list,
+    updateRow,
   );
   const root = h("aside", { class: "sidebar" }, inner);
 
   let signature = "";
   const render = (s: State) => {
     newChat.classList.toggle("selected", s.currentId === null && s.view === "chat" && !s.session);
+    const u = s.update;
+    updateRow.hidden = !u;
+    if (u) {
+      const busy = u.phase === "downloading" || u.phase === "installing";
+      updateRow.querySelector(".update-text")!.textContent =
+        u.phase === "downloading" ? `Downloading… ${Math.round((u.progress ?? 0) * 100)}%` : u.phase === "installing" ? "Installing…" : u.phase === "failed" ? "Update failed · Retry" : `Update to ${u.version}`;
+      updateRow.title = u.phase === "failed" ? (u.error ?? "") : (u.notes ?? "");
+      (updateRow as HTMLButtonElement).disabled = busy;
+      updateRow.classList.toggle("busy", busy);
+      updateRow.classList.toggle("err", u.phase === "failed");
+    }
     const sig = [s.currentId, s.renamingId, s.view, s.sessions.map((x) => `${x.id}:${x.title}:${x.updated_at}`).join("|"), Object.keys(s.live).join(",")].join("\n");
     if (sig === signature) return;
     signature = sig;
@@ -100,12 +114,8 @@ export function createWindowControls(): HTMLElement {
     "button",
     { class: "icon-btn", title: "Settings (⌘,)", "aria-label": "Settings", onclick: () => (store.state.view === "settings" ? actions.closeSettings() : actions.openSettings()) },
     icon("gear"),
-    h("span", { class: "badge", hidden: true, "aria-label": "Update available" }),
   );
-  store.subscribe((s) => {
-    settings.classList.toggle("on", s.view === "settings");
-    (settings.querySelector(".badge") as HTMLElement).hidden = !s.update || s.update.phase === "failed";
-  });
+  store.subscribe((s) => settings.classList.toggle("on", s.view === "settings"));
   return h(
     "div",
     { class: "window-controls", "data-tauri-drag-region": "" },

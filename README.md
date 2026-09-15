@@ -24,7 +24,7 @@ Requirements: Rust (stable), Node 20+, Xcode command line tools.
 ```sh
 npm install
 npm run tauri dev            # dev build with hot reload
-npm run tauri build          # release .app + .dmg in src-tauri/target/release/bundle
+npm run tauri build          # release .app + updater archive in src-tauri/target/release/bundle
 ```
 
 ### Install
@@ -35,13 +35,14 @@ curl -fsSL https://im.linghaoz.com/install.sh | sh
 
 That downloads the latest release, verifies its checksum and puts `im.app` in
 `/Applications` — and because `curl` doesn't set the quarantine flag, it opens
-without the "unidentified developer" stop. Prefer a disk image? Grab the `.dmg`
-from [Releases](https://github.com/yetlinghao/im/releases); on first launch
-macOS will refuse once — *System Settings → Privacy & Security → Open Anyway*.
+without the "unidentified developer" stop. That is the only install path on
+purpose: there is no dmg to drag and no Gatekeeper dialog to click through.
 
-Updates come from inside the app: it checks the release feed quietly after
-launch and puts a dot on the gear when there is one; **Settings → Version →
-Update** (or **im → Check for Updates…**) downloads, installs and relaunches.
+Updates come from inside the app. It checks the release feed quietly after
+launch (and every few hours); when there is a new version a single line
+appears at the foot of the sidebar — **Update to 0.2.0** — and clicking it
+downloads, installs and relaunches. Nothing pops up. **im → Check for
+Updates…** and **Settings → Version** are there for checking by hand.
 
 ### Releasing
 
@@ -50,8 +51,8 @@ Update** (or **im → Check for Updates…**) downloads, installs and relaunches
 `install.sh`.
 
 A tag is a release. `.github/workflows/release.yml` builds a universal macOS
-app, signs the updater archive with the project's key, and publishes the
-`.dmg`, `im.app.tar.gz` + `.sig`, a `sha256` for the installer and
+app, signs the updater archive with the project's key, and publishes
+`im_universal.app.tar.gz` + `.sig`, a `sha256` for the installer and
 `latest.json` (what the app polls) as a GitHub Release.
 
 ```sh

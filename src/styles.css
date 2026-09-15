@@ -238,6 +238,46 @@ body.no-sidebar .sidebar-inner {
   padding: 0 10px 8px;
   scrollbar-width: thin;
 }
+/* Sidebar foot, present only while an update is waiting: dot · "0.2.0 available" · Update */
+.update-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 0 8px;
+  height: 30px;
+  border-radius: 6px;
+  font-size: var(--small);
+  color: var(--accent);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.update-row .dot {
+  animation: none;
+}
+.update-row.busy {
+  color: var(--secondary);
+}
+.update-row.busy .dot {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.update-row .update-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.update-row:not(:disabled):hover {
+  background: var(--fill);
+}
+.update-row.err {
+  color: var(--red);
+}
+.update-row.err .dot {
+  background: var(--red);
+}
 .group-label {
   font-size: var(--tiny);
   font-weight: 600;
@@ -502,19 +542,6 @@ body.no-sidebar .main {
 .icon-btn.on {
   background: var(--selection);
   color: var(--label);
-}
-/* An update is waiting in Settings. */
-.icon-btn {
-  position: relative;
-}
-.icon-btn .badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
 }
 
 .model-btn {
