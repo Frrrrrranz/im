@@ -15,7 +15,7 @@ const SANDBOX = "allow-scripts allow-forms allow-modals allow-popups";
 class FrameStack {
   readonly el: HTMLElement;
   private frames: [HTMLIFrameElement, HTMLIFrameElement];
-  private front = 0;
+  private front: 0 | 1 = 0;
   private urls: [string, string] = ["", ""];
   private shown = "";
   private pending: string | null = null;
@@ -23,7 +23,13 @@ class FrameStack {
   private lastSwap = 0;
 
   constructor() {
-    const mk = () => h("iframe", { class: "pane-frame", sandbox: SANDBOX, title: "HTML preview", tabindex: -1 }) as HTMLIFrameElement;
+    const mk = () =>
+      h("iframe", {
+        class: "pane-frame",
+        sandbox: SANDBOX,
+        title: "HTML preview",
+        tabindex: -1,
+      }) as HTMLIFrameElement;
     this.frames = [mk(), mk()];
     this.el = h("div", { class: "pane" }, this.frames[0], this.frames[1]);
   }
@@ -49,20 +55,20 @@ class FrameStack {
     this.pending = null;
     if (html === this.shown) return;
     this.busy = true;
-    const back = 1 - this.front;
-    const frame = this.frames[back]!;
+    const back = this.front === 0 ? 1 : 0;
+    const frame = this.frames[back];
     const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
     const done = () => {
       frame.removeEventListener("load", done);
       // `load` fires before the new document has painted; give it two frames,
       // then fade it in *over* the old one — the old frame stays opaque until
       // it is fully covered, so no white ever shows through the cross-fade.
-      const old = this.frames[this.front]!;
+      const old = this.frames[this.front];
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
           old.classList.remove("top");
           frame.classList.add("top", "show");
-          if (this.urls[back]) URL.revokeObjectURL(this.urls[back]!);
+          if (this.urls[back]) URL.revokeObjectURL(this.urls[back]);
           this.urls[back] = url;
           this.front = back;
           this.shown = html;
@@ -78,7 +84,6 @@ class FrameStack {
     frame.addEventListener("load", done);
     frame.src = url;
   }
-
 }
 
 const panes = new WeakMap<HTMLElement, FrameStack>();
@@ -89,7 +94,17 @@ export function attachPreview(pre: HTMLElement, html: string) {
   if (!stack) {
     stack = new FrameStack();
     panes.set(pre, stack);
-    const wrap = h("div", { class: "code-preview", role: "button", title: "Enlarge preview", "aria-label": "Enlarge preview" }, stack.el, h("span", { class: "pane-zoom" }, icon("expand")));
+    const wrap = h(
+      "div",
+      {
+        class: "code-preview",
+        role: "button",
+        title: "Enlarge preview",
+        "aria-label": "Enlarge preview",
+      },
+      stack.el,
+      h("span", { class: "pane-zoom" }, icon("expand")),
+    );
     pre.prepend(wrap);
   }
   if (settled(html)) stack.set(html);
@@ -156,14 +171,31 @@ export function enlarge(wrap: HTMLElement, host: HTMLElement) {
 /** The same growth for an image in a user turn; it never scales past its natural size. */
 export function enlargeImage(img: HTMLImageElement, host: HTMLElement) {
   if (open || !img.naturalWidth) return;
-  const card = h("div", { class: "lightbox-card" }, h("img", { class: "lightbox-image", src: img.src, alt: img.alt }), closeButton());
+  const card = h(
+    "div",
+    { class: "lightbox-card" },
+    h("img", { class: "lightbox-image", src: img.src, alt: img.alt }),
+    closeButton(),
+  );
   document.body.append(card);
   const turn = img.closest(".turn") as HTMLElement | null;
   const nth = turn ? Array.from(turn.querySelectorAll("img")).indexOf(img) : -1;
-  show(host, card, img.getBoundingClientRect(), (r) => fit(r, img.naturalWidth / img.naturalHeight, img.naturalWidth), {
-    home: () => (img.isConnected ? img : ((turn?.dataset.index && document.querySelector(`.transcript .turn[data-index="${turn.dataset.index}"] img:nth-of-type(${nth + 1})`)) as HTMLElement | null) ?? null),
-    dispose: () => card.remove(),
-  });
+  show(
+    host,
+    card,
+    img.getBoundingClientRect(),
+    (r) => fit(r, img.naturalWidth / img.naturalHeight, img.naturalWidth),
+    {
+      home: () =>
+        img.isConnected
+          ? img
+          : (((turn?.dataset.index &&
+              document.querySelector(
+                `.transcript .turn[data-index="${turn.dataset.index}"] img:nth-of-type(${nth + 1})`,
+              )) as HTMLElement | null) ?? null),
+      dispose: () => card.remove(),
+    },
+  );
 }
 
 /** Close if something is enlarged. With `force` false, only when its card has
@@ -188,7 +220,13 @@ function closeButton(): HTMLElement {
   );
 }
 
-function show(host: HTMLElement, card: HTMLElement, from: DOMRect, target: (avail: DOMRect) => DOMRect, opts: Pick<Lightbox, "home" | "dispose"> & { late?: boolean }) {
+function show(
+  host: HTMLElement,
+  card: HTMLElement,
+  from: DOMRect,
+  target: (avail: DOMRect) => DOMRect,
+  opts: Pick<Lightbox, "home" | "dispose"> & { late?: boolean },
+) {
   const shade = h("div", { class: "lightbox", onclick: () => close() });
   host.append(shade);
 
@@ -227,7 +265,11 @@ function show(host: HTMLElement, card: HTMLElement, from: DOMRect, target: (avai
     }
   };
   const onResize = () => {
-    if (open) settle(card, (open.rect = target(available(host))));
+    if (open) {
+      const rect = target(available(host));
+      open.rect = rect;
+      settle(card, rect);
+    }
   };
   window.addEventListener("keydown", onKey);
   window.addEventListener("resize", onResize);
@@ -250,7 +292,9 @@ function close() {
   const { shade, card, rect, home, unhook, dispose } = open;
   open = null;
   unhook();
-  const back = card.isConnected ? (home()?.getBoundingClientRect() ?? null) : null;
+  const back = card.isConnected
+    ? (home()?.getBoundingClientRect() ?? null)
+    : null;
   shade.classList.remove("in");
   card.classList.remove("in");
   // If the box never got to its final layout (closed mid-flight) it is still laid out at the source.
@@ -291,14 +335,24 @@ function available(host: HTMLElement): DOMRect {
   const r = host.getBoundingClientRect();
   const m = 24;
   const top = 40 + 12;
-  return new DOMRect(r.left + m, r.top + top, r.width - 2 * m, r.height - top - m);
+  return new DOMRect(
+    r.left + m,
+    r.top + top,
+    r.width - 2 * m,
+    r.height - top - m,
+  );
 }
 
 /** The largest `ratio` box inside `avail`, no wider than `maxWidth`, centred. */
 function fit(avail: DOMRect, ratio: number, maxWidth: number): DOMRect {
   const w = Math.min(avail.width, avail.height * ratio, maxWidth);
   const hgt = w / ratio;
-  return new DOMRect(avail.left + (avail.width - w) / 2, avail.top + (avail.height - hgt) / 2, w, hgt);
+  return new DOMRect(
+    avail.left + (avail.width - w) / 2,
+    avail.top + (avail.height - hgt) / 2,
+    w,
+    hgt,
+  );
 }
 
 /** Cards are `position: fixed`, so rects are viewport coordinates as measured. Geometry never animates. */

@@ -5,7 +5,8 @@
 :root {
   color-scheme: light dark;
 
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   --label: light-dark(rgba(0, 0, 0, 0.85), rgba(255, 255, 255, 0.85));
@@ -16,14 +17,20 @@
   --fill: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.075));
   --fill-hover: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.11));
   --fill-code: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.055));
-  --code-bg: light-dark(#f5f5f6, #29292c); /* solid, so the sticky gutter can cover scrolled code */
+  --code-bg: light-dark(
+    #f5f5f6,
+    #29292c
+  ); /* solid, so the sticky gutter can cover scrolled code */
   --selection: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.14));
   --popover: light-dark(rgba(246, 246, 246, 0.96), rgba(44, 44, 46, 0.96));
   --field: light-dark(#ffffff, rgba(255, 255, 255, 0.04));
   --red: light-dark(#d70015, #ff453a);
   --accent: light-dark(#007aff, #0a84ff);
   --accent-text: #ffffff;
-  --shadow: light-dark(0 8px 28px rgba(0, 0, 0, 0.16), 0 8px 28px rgba(0, 0, 0, 0.5));
+  --shadow: light-dark(
+    0 8px 28px rgba(0, 0, 0, 0.16),
+    0 8px 28px rgba(0, 0, 0, 0.5)
+  );
 
   --sidebar-w: 180px; /* both column widths are overridden inline when the user drags them */
   --inspector-w: 300px;
@@ -55,9 +62,11 @@
   box-sizing: border-box;
 }
 [hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: Hidden elements must override component display rules. */
   display: none !important;
 }
 body.no-transitions * {
+  /* biome-ignore lint/complexity/noImportantStyles: Startup must suppress all component transitions. */
   transition: none !important;
 }
 
@@ -109,12 +118,6 @@ input:focus-visible {
   outline: none;
 }
 
-/* Outside Tauri there is no vibrancy layer; stand in for the sidebar material. */
-html.mock .sidebar,
-html.mock .inspector {
-  background: light-dark(#e9e9eb, #2a2a2c);
-}
-
 #app {
   position: relative;
   display: flex;
@@ -164,6 +167,7 @@ body.resizing {
   cursor: col-resize;
 }
 body.resizing * {
+  /* biome-ignore lint/complexity/noImportantStyles: Dragging must suppress all component transitions. */
   transition: none !important;
   pointer-events: none;
 }
@@ -177,7 +181,9 @@ body.resizing * {
   min-height: 0;
   overflow: hidden;
   border-right: 1px solid var(--separator);
-  transition: width var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  transition:
+    width var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
 }
 body.no-sidebar .sidebar {
   width: 0;
@@ -188,7 +194,9 @@ body.no-sidebar .sidebar {
   height: 100%;
   display: flex;
   flex-direction: column;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
 }
 body.no-sidebar .sidebar-inner {
   opacity: 0;
@@ -228,9 +236,6 @@ body.no-sidebar .sidebar-inner {
 .nav-row.selected {
   background: var(--selection);
 }
-.nav-row.selected svg {
-  color: var(--label);
-}
 .sessions {
   flex: 1;
   min-height: 0;
@@ -238,52 +243,49 @@ body.no-sidebar .sidebar-inner {
   padding: 0 10px 8px;
   scrollbar-width: thin;
 }
-/* Sidebar foot: the gear in the corner; the update line only while one is waiting. */
+/* Sidebar foot: one card with gear, "Settings" label, and blue dot when update waiting. */
 .sidebar-foot {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 11px 10px;
-}
-.update-row {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 9px;
   padding: 0 8px;
-  height: 26px;
+  height: 30px;
+  margin: 0 10px 10px;
   border-radius: 6px;
-  font-size: var(--small);
-  color: var(--accent);
+  font-size: var(--ui);
+  color: var(--label);
   text-align: left;
-  font-variant-numeric: tabular-nums;
+  background: none;
 }
-.update-row .dot {
-  animation: none;
-}
-.update-row.busy {
-  color: var(--secondary);
-}
-.update-row.busy .dot {
-  animation: pulse 1.2s ease-in-out infinite;
-}
-.update-row .update-text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.update-row:not(:disabled):hover {
+.sidebar-foot:hover {
   background: var(--fill);
 }
-.update-row.err {
-  color: var(--red);
+.sidebar-foot svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--secondary);
 }
-.update-row.err .dot {
-  background: var(--red);
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+  flex: none;
+}
+.sidebar-foot .dot {
+  position: absolute;
+  right: -2px;
+  top: 2px;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.sidebar-foot {
+  position: relative;
 }
 .group-label {
   font-size: var(--tiny);
@@ -327,15 +329,6 @@ body.no-sidebar .sidebar-inner {
   user-select: text;
   -webkit-user-select: text;
 }
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1.2s ease-in-out infinite;
-  flex: none;
-}
-
 /* ---- inspector: the trajectory as data ------------------------------- */
 
 .inspector {
@@ -345,7 +338,9 @@ body.no-sidebar .sidebar-inner {
   min-height: 0;
   overflow: hidden;
   border-left: 1px solid var(--separator);
-  transition: width var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  transition:
+    width var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
 }
 body.no-inspector .inspector {
   width: 0;
@@ -359,7 +354,9 @@ body.no-inspector .inspector {
   height: 100%;
   display: flex;
   flex-direction: column;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
 }
 body.no-inspector .inspector-inner {
   opacity: 0;
@@ -499,9 +496,10 @@ body.no-inspector .inspector-inner {
   color: var(--label);
   tab-size: 2;
 }
-.inspector pre.json .code-bar {
-  top: 6px;
-  right: 8px;
+/* Outside Tauri there is no vibrancy layer; stand in for the sidebar material. */
+html.mock .sidebar,
+html.mock .inspector {
+  background: light-dark(#e9e9eb, #2a2a2c);
 }
 
 /* ---- main column ----------------------------------------------------- */
@@ -516,7 +514,11 @@ body.no-inspector .inspector-inner {
   position: relative;
 }
 body.no-sidebar .main {
-  --topbar-left: calc(var(--controls-left) + var(--controls-w) + 6px); /* clear the traffic lights and both buttons */
+  --topbar-left: calc(
+    var(--controls-left) +
+    var(--controls-w) +
+    6px
+  ); /* clear the traffic lights and both buttons */
 }
 .topbar {
   height: var(--top-h);
@@ -708,13 +710,6 @@ body.resizing .resizer.column-handle::after {
   gap: 6px;
   max-width: 78%;
   margin-bottom: 6px;
-}
-.turn.user .images img {
-  display: block;
-  max-width: 100%;
-  max-height: 260px;
-  border-radius: 12px;
-  border: 1px solid var(--separator);
 }
 .body {
   overflow-wrap: anywhere;
@@ -1080,7 +1075,9 @@ details.reasoning summary:hover {
   box-shadow: var(--shadow);
   transform-origin: 0 0;
   /* Only the transform moves (composited); the box is laid out once at its final size. */
-  transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  transition:
+    transform var(--dur) var(--ease),
+    opacity var(--dur) var(--ease);
 }
 .pane.lightbox-card {
   aspect-ratio: auto;
@@ -1128,6 +1125,10 @@ details.reasoning summary:hover {
   transition: opacity 80ms ease;
   user-select: none;
   -webkit-user-select: none;
+}
+.inspector pre.json .code-bar {
+  top: 6px;
+  right: 8px;
 }
 pre.code:hover .code-bar {
   opacity: 1;
@@ -1193,12 +1194,18 @@ pre.code:hover .code-bar {
   border-radius: 50%;
   background: var(--popover);
   border: 1px solid var(--separator);
-  box-shadow: light-dark(0 2px 8px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.5));
+  box-shadow: light-dark(
+    0 2px 8px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.5)
+  );
   color: var(--secondary);
   opacity: 0;
   transform: translate(-50%, 6px);
   pointer-events: none;
-  transition: opacity 140ms ease, transform 140ms ease, color 100ms ease;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    color 100ms ease;
   z-index: 2;
 }
 .jump.show {
@@ -1242,8 +1249,8 @@ pre.code:hover .code-bar {
 .field:focus-within {
   border-color: light-dark(rgba(0, 0, 0, 0.22), rgba(255, 255, 255, 0.28));
 }
-.composer.editing .field,
-body.dropping .field {
+body.dropping .field,
+.composer.editing .field {
   border-color: var(--accent);
 }
 /* Images waiting to go out with the next message. */
@@ -1264,6 +1271,13 @@ body.dropping .field {
   border-radius: 8px;
   border: 1px solid var(--separator);
   object-fit: cover;
+}
+.turn.user .images img {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  border-radius: 12px;
+  border: 1px solid var(--separator);
 }
 .attachment-remove {
   position: absolute;
@@ -1316,7 +1330,9 @@ body.dropping .field {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 100ms ease, transform 100ms ease;
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
 }
 .send:disabled {
   background: var(--fill);
@@ -1451,6 +1467,12 @@ body.dropping .field {
 .section:first-of-type {
   margin-top: 0;
 }
+.section.with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .settings h2 {
   font-size: var(--ui);
   font-weight: 600;
@@ -1497,6 +1519,10 @@ body.dropping .field {
   font-size: var(--ui);
   color: var(--label);
   min-width: 0;
+}
+.srow.has-block .srow-label {
+  align-self: start;
+  padding-top: 2px;
 }
 .srow-note {
   margin-top: 2px;
@@ -1564,7 +1590,7 @@ body.dropping .field {
 
 /* Fields sit flush in their row: no chrome until you focus them. */
 .sfield {
-  width: 100%;
+  width: calc(100% + 16px);
   min-width: 0;
   padding: 3px 8px;
   margin: -3px -8px;
@@ -1592,12 +1618,11 @@ body.dropping .field {
 .sfield.name {
   text-align: left;
   font-weight: 600;
-  margin-left: -8px;
-  width: calc(100% + 16px);
 }
 .sfield.num {
   width: 96px;
   margin-right: -8px;
+  text-align: right;
 }
 .sfield.area {
   display: block;
@@ -1663,31 +1688,9 @@ body.dropping .field {
 .tbtn.danger {
   color: var(--red);
 }
-.add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 6px 10px 6px 6px;
-  border-radius: 8px;
-  font-size: var(--ui);
+/* Selected navigation icons override the base icon colors above. */
+.nav-row.selected svg {
   color: var(--label);
-}
-.add-row:hover {
-  background: var(--fill);
-}
-.add-plus {
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 15px;
-  line-height: 1;
-  padding-bottom: 1px;
 }
 .segmented {
   display: inline-flex;
@@ -1700,6 +1703,14 @@ body.dropping .field {
   border-radius: 6px;
   font-size: var(--small);
   color: var(--secondary);
+}
+.seg.icon-seg {
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .seg.on {
   background: light-dark(#ffffff, rgba(255, 255, 255, 0.16));

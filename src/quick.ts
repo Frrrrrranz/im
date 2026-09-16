@@ -31,12 +31,40 @@ const MAX_FIELD = 176;
 async function main() {
   const host = isTauri ? await tauriHost() : mockHost();
   const quoteText = h("div", { class: "quote-text" });
-  const quoteRemove = h("button", { class: "quote-remove", type: "button", "aria-label": "Remove quote", title: "Remove quote" }, icon("close"));
-  const quote = h("div", { class: "quote", hidden: true }, quoteText, quoteRemove);
-  const textarea = h("textarea", { class: "input", rows: 1, placeholder: "Message", spellcheck: true }) as HTMLTextAreaElement;
-  const send = h("button", { class: "send", type: "button", "aria-label": "Send", disabled: true }, icon("arrowUp")) as HTMLButtonElement;
-  const card = h("div", { class: "card" }, quote, h("div", { class: "field-row" }, textarea, send));
-  document.getElementById("quick")!.append(card);
+  const quoteRemove = h(
+    "button",
+    {
+      class: "quote-remove",
+      type: "button",
+      "aria-label": "Remove quote",
+      title: "Remove quote",
+    },
+    icon("close"),
+  );
+  const quote = h(
+    "div",
+    { class: "quote", hidden: true },
+    quoteText,
+    quoteRemove,
+  );
+  const textarea = h("textarea", {
+    class: "input",
+    rows: 1,
+    placeholder: "Message",
+    spellcheck: true,
+  }) as HTMLTextAreaElement;
+  const send = h(
+    "button",
+    { class: "send", type: "button", "aria-label": "Send", disabled: true },
+    icon("arrowUp"),
+  ) as HTMLButtonElement;
+  const card = h(
+    "div",
+    { class: "card" },
+    quote,
+    h("div", { class: "field-row" }, textarea, send),
+  );
+  document.getElementById("quick")?.append(card);
 
   let selection: string | null = null;
   let composing = false;
@@ -45,7 +73,8 @@ async function main() {
   const resize = () => {
     textarea.style.height = "0px";
     textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_FIELD)}px`;
-    textarea.style.overflowY = textarea.scrollHeight > MAX_FIELD ? "auto" : "hidden";
+    textarea.style.overflowY =
+      textarea.scrollHeight > MAX_FIELD ? "auto" : "hidden";
   };
   const paintSend = () => {
     send.disabled = !textarea.value.trim() && !selection;
@@ -61,7 +90,10 @@ async function main() {
     const text = textarea.value.trim();
     const quoted = selection?.trim();
     if (!quoted) return text;
-    const block = quoted.split("\n").map((line) => `> ${line}`).join("\n");
+    const block = quoted
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n");
     return text ? `${block}\n\n${text}` : block;
   };
 
@@ -91,7 +123,13 @@ async function main() {
     void host.resize(height());
   });
   textarea.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      !e.altKey &&
+      !e.metaKey &&
+      !e.ctrlKey
+    ) {
       if (composing || e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       submit();
@@ -127,21 +165,43 @@ async function tauriHost(): Promise<Host> {
   const { listen } = await import("@tauri-apps/api/event");
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   // Failures in this window are otherwise invisible: forward them to the process log.
-  const report = (message: string) => invoke("log_message", { level: "error", message: `quick: ${message}` }).catch(() => {});
-  window.addEventListener("error", (e) => report(`${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener("unhandledrejection", (e) => report(`unhandled rejection: ${String(e.reason?.stack ?? e.reason)}`));
+  const report = (message: string) =>
+    invoke("log_message", {
+      level: "error",
+      message: `quick: ${message}`,
+    }).catch(() => {});
+  window.addEventListener("error", (e) =>
+    report(`${e.message} @ ${e.filename}:${e.lineno}`),
+  );
+  window.addEventListener("unhandledrejection", (e) =>
+    report(`unhandled rejection: ${String(e.reason?.stack ?? e.reason)}`),
+  );
   // Debug builds: IM_QUICK_SEND types a message and presses Return once the panel is up; IM_QUICK_ESC=1 presses Esc.
-  const scenario = await invoke<{ quick_send?: string | null; quick_esc?: boolean } | null>("debug_scenario").catch(() => null);
+  const scenario = await invoke<{
+    quick_send?: string | null;
+    quick_esc?: boolean;
+  } | null>("debug_scenario").catch(() => null);
   let listening: Promise<unknown> = Promise.resolve();
   return {
     onShow: (cb) => {
       listening = listen<ShowPayload>("quick:show", (e) => {
         cb(e.payload);
-        if (scenario?.quick_send) setTimeout(() => typeAndSend(scenario.quick_send!), 700);
-        else if (scenario?.quick_esc) setTimeout(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })), 700);
+        const quickSend = scenario?.quick_send;
+        if (quickSend) setTimeout(() => typeAndSend(quickSend), 700);
+        else if (scenario?.quick_esc)
+          setTimeout(
+            () =>
+              window.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape" }),
+              ),
+            700,
+          );
       });
     },
-    onBlur: (cb) => void getCurrentWindow().onFocusChanged(({ payload: focused }) => !focused && cb()),
+    onBlur: (cb) =>
+      void getCurrentWindow().onFocusChanged(
+        ({ payload: focused }) => !focused && cb(),
+      ),
     ready: async () => {
       await listening;
       await invoke("quick_ready");
@@ -170,9 +230,13 @@ function mockHost(): Host {
   const state = params.get("state") ?? "empty";
   const selection =
     state === "quote" || state === "typed"
-      ? "The stream is dropped, and whatever text already arrived is persisted with finish_reason: \"cancelled\" — so a truncated reply is still a faithful trajectory."
+      ? 'The stream is dropped, and whatever text already arrived is persisted with finish_reason: "cancelled" — so a truncated reply is still a faithful trajectory.'
       : state === "long"
-        ? Array.from({ length: 12 }, (_, i) => `line ${i + 1} of a long selection that should be clamped to three lines in the panel`).join("\n")
+        ? Array.from(
+            { length: 12 },
+            (_, i) =>
+              `line ${i + 1} of a long selection that should be clamped to three lines in the panel`,
+          ).join("\n")
         : null;
   const log = (what: string) => {
     document.title = `quick: ${what}`;
@@ -183,7 +247,8 @@ function mockHost(): Host {
         cb({ selection, model: "anthropic/claude-sonnet-4", access: true });
         if (state === "typed") {
           const ta = document.querySelector(".input") as HTMLTextAreaElement;
-          ta.value = "Is that also what happens when the connection drops halfway?";
+          ta.value =
+            "Is that also what happens when the connection drops halfway?";
           ta.dispatchEvent(new Event("input"));
         }
       }, 50);

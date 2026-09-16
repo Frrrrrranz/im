@@ -9,7 +9,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "biome:check": "biome check .",
+    "biome:fix": "biome check --write ."
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
@@ -22,6 +24,7 @@
     "marked": "^18.0.13"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
     "@tauri-apps/cli": "^2.11.4",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"

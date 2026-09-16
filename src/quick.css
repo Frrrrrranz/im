@@ -98,10 +98,16 @@ body {
 html.mock body {
   min-height: 100vh;
   padding: 24px;
-  background: light-dark(linear-gradient(135deg, #d7e3f4, #f3e2d0), linear-gradient(135deg, #2b3446, #4a3a3a));
+  background: light-dark(
+    linear-gradient(135deg, #d7e3f4, #f3e2d0),
+    linear-gradient(135deg, #2b3446, #4a3a3a)
+  );
 }
 html.mock .card {
   background: light-dark(rgba(246, 246, 248, 0.82), rgba(40, 40, 44, 0.82));
-  box-shadow: light-dark(0 12px 40px rgba(0, 0, 0, 0.22), 0 12px 40px rgba(0, 0, 0, 0.6));
+  box-shadow: light-dark(
+    0 12px 40px rgba(0, 0, 0, 0.22),
+    0 12px 40px rgba(0, 0, 0, 0.6)
+  );
   backdrop-filter: blur(30px) saturate(1.6);
 }

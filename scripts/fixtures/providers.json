@@ -17,20 +17,14 @@
       "name": "Anthropic",
       "protocol": "anthropic",
       "base_url": "https://api.anthropic.com/v1",
-      "models": [
-        "claude-opus-5",
-        "claude-sonnet-5"
-      ]
+      "models": ["claude-opus-5", "claude-sonnet-5"]
     },
     {
       "id": "mock",
       "name": "Mock",
       "protocol": "chat",
       "base_url": "http://127.0.0.1:8787/v1",
-      "models": [
-        "mock-large",
-        "mock-small"
-      ]
+      "models": ["mock-large", "mock-small"]
     }
   ]
 }

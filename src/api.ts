@@ -3,7 +3,7 @@
 // mock so the whole UI can be exercised without the native shell.
 
 import { contentWith, textOf } from "./content";
-import { isImagePath, type ImageSource } from "./images";
+import { type ImageSource, isImagePath } from "./images";
 import type {
   ContextItem,
   Message,
@@ -22,7 +22,11 @@ export interface Backend {
   getSession(id: string): Promise<Session>;
   deleteSession(id: string): Promise<void>;
   renameSession(id: string, title: string): Promise<Session>;
-  setSessionModel(id: string, providerId: string, model: string): Promise<Session>;
+  setSessionModel(
+    id: string,
+    providerId: string,
+    model: string,
+  ): Promise<Session>;
   runTurn(kind: TurnKind, onEvent: (e: TurnEvent) => void): Promise<void>;
   cancelTurn(sessionId: string): Promise<boolean>;
   activeTurns(ids: string[]): Promise<string[]>;
@@ -30,7 +34,12 @@ export interface Backend {
   getProviders(): Promise<ProviderView[]>;
   saveProvider(input: ProviderInput): Promise<ProviderView[]>;
   deleteProvider(id: string): Promise<ProviderView[]>;
-  fetchModels(protocol: Protocol, baseUrl: string, apiKey?: string, providerId?: string): Promise<string[]>;
+  fetchModels(
+    protocol: Protocol,
+    baseUrl: string,
+    apiKey?: string,
+    providerId?: string,
+  ): Promise<string[]>;
 
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<void>;
@@ -50,7 +59,10 @@ export interface Backend {
   /** Native file chooser, images only; the chosen files' bytes. */
   pickImages(): Promise<ImageSource[]>;
   /** Image files dragged onto the window; `hover` tracks whether one is over it right now. */
-  onDrop(cb: (files: ImageSource[]) => void, hover: (over: boolean) => void): Promise<() => void>;
+  onDrop(
+    cb: (files: ImageSource[]) => void,
+    hover: (over: boolean) => void,
+  ): Promise<() => void>;
   copyText(text: string): Promise<void>;
   openUrl(url: string): Promise<void>;
   saveDialog(defaultName: string, ext: string): Promise<string | null>;
@@ -63,7 +75,12 @@ export interface Backend {
   /** Download + install the update found by `checkUpdate`, then relaunch. */
   installUpdate(onProgress: (fraction: number) => void): Promise<void>;
   /** Debug-only scenario hooks (env in Tauri, `?state=` in the browser). `attach` is a file path to read as a drop would. */
-  scenario(): Promise<{ state?: string | null; autosend?: string | null; attach?: string | null; query?: string | null } | null>;
+  scenario(): Promise<{
+    state?: string | null;
+    autosend?: string | null;
+    attach?: string | null;
+    query?: string | null;
+  } | null>;
 }
 
 export const isTauri = "__TAURI_INTERNALS__" in window;
@@ -80,16 +97,22 @@ async function tauriBackend(): Promise<Backend> {
   let pendingUpdate: import("@tauri-apps/plugin-updater").Update | null = null;
   // Paths come from the OS (drop, dialog); the bytes come back as an ArrayBuffer.
   const readImages = (paths: string[]) =>
-    Promise.all(paths.filter(isImagePath).map((path) => invoke<ArrayBuffer>("read_image", { path }).catch((e) => (console.warn(`read_image ${path}:`, e), null)))).then((r) =>
-      r.filter((b): b is ArrayBuffer => b !== null),
-    );
+    Promise.all(
+      paths.filter(isImagePath).map((path) =>
+        invoke<ArrayBuffer>("read_image", { path }).catch((e) => {
+          console.warn(`read_image ${path}:`, e);
+          return null;
+        }),
+      ),
+    ).then((r) => r.filter((b): b is ArrayBuffer => b !== null));
 
   return {
     listSessions: () => invoke("list_sessions"),
     getSession: (id) => invoke("get_session", { id }),
     deleteSession: (id) => invoke("delete_session", { id }),
     renameSession: (id, title) => invoke("rename_session", { id, title }),
-    setSessionModel: (id, providerId, model) => invoke("set_session_model", { id, providerId, model }),
+    setSessionModel: (id, providerId, model) =>
+      invoke("set_session_model", { id, providerId, model }),
     runTurn: (kind, onEvent) => {
       const onEventChannel = new Channel<TurnEvent>();
       onEventChannel.onmessage = onEvent;
@@ -102,7 +125,12 @@ async function tauriBackend(): Promise<Backend> {
     saveProvider: (input) => invoke("save_provider", { input }),
     deleteProvider: (id) => invoke("delete_provider", { id }),
     fetchModels: (protocol, baseUrl, apiKey, providerId) =>
-      invoke("fetch_models", { protocol, baseUrl, apiKey: apiKey ?? null, providerId: providerId ?? null }),
+      invoke("fetch_models", {
+        protocol,
+        baseUrl,
+        apiKey: apiKey ?? null,
+        providerId: providerId ?? null,
+      }),
 
     getSettings: () => invoke("get_settings"),
     saveSettings: (settings) => invoke("save_settings", { settings }),
@@ -117,8 +145,30 @@ async function tauriBackend(): Promise<Backend> {
     quickAccess: () => invoke("quick_access"),
     requestQuickAccess: () => invoke("quick_request_access"),
     pickImages: async () => {
-      const picked = await open({ multiple: true, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "avif", "bmp", "tiff", "tif"] }] });
-      return readImages(Array.isArray(picked) ? picked : picked ? [picked] : []);
+      const picked = await open({
+        multiple: true,
+        filters: [
+          {
+            name: "Images",
+            extensions: [
+              "png",
+              "jpg",
+              "jpeg",
+              "gif",
+              "webp",
+              "heic",
+              "heif",
+              "avif",
+              "bmp",
+              "tiff",
+              "tif",
+            ],
+          },
+        ],
+      });
+      return readImages(
+        Array.isArray(picked) ? picked : picked ? [picked] : [],
+      );
     },
     onDrop: (cb, hover) =>
       getCurrentWebview().onDragDropEvent(async (e) => {
@@ -134,8 +184,12 @@ async function tauriBackend(): Promise<Backend> {
     copyText: (text) => writeText(text),
     openUrl: (url) => openUrl(url),
     saveDialog: async (defaultName, ext) =>
-      save({ defaultPath: defaultName, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] }),
-    confirm: (message, title, okLabel) => ask(message, { title, kind: "warning", okLabel, cancelLabel: "Cancel" }),
+      save({
+        defaultPath: defaultName,
+        filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+      }),
+    confirm: (message, title, okLabel) =>
+      ask(message, { title, kind: "warning", okLabel, cancelLabel: "Cancel" }),
     showWindow: async () => {
       const w = getCurrentWindow();
       await w.show();
@@ -145,7 +199,12 @@ async function tauriBackend(): Promise<Backend> {
     checkUpdate: async () => {
       const { check } = await import("@tauri-apps/plugin-updater");
       pendingUpdate = await check();
-      return pendingUpdate ? { version: pendingUpdate.version, notes: pendingUpdate.body ?? undefined } : null;
+      return pendingUpdate
+        ? {
+            version: pendingUpdate.version,
+            notes: pendingUpdate.body ?? undefined,
+          }
+        : null;
     },
     installUpdate: async (onProgress) => {
       if (!pendingUpdate) throw new Error("no update to install");
@@ -238,7 +297,8 @@ export function sampleImage(): string {
   const c = document.createElement("canvas");
   c.width = 960;
   c.height = 600;
-  const ctx = c.getContext("2d")!;
+  const ctx = c.getContext("2d");
+  if (!ctx) throw new Error("Could not create the sample image canvas");
   const bg = ctx.createLinearGradient(0, 0, 960, 600);
   bg.addColorStop(0, "#dfe7f3");
   bg.addColorStop(1, "#f4e9dc");
@@ -289,7 +349,12 @@ function mockBackend(): Backend {
             name: "OpenRouter",
             protocol: "chat",
             base_url: "https://openrouter.ai/api/v1",
-            models: ["anthropic/claude-sonnet-4", "openai/gpt-5", "deepseek/deepseek-r1", "google/gemini-2.5-pro"],
+            models: [
+              "anthropic/claude-sonnet-4",
+              "openai/gpt-5",
+              "deepseek/deepseek-r1",
+              "google/gemini-2.5-pro",
+            ],
             has_key: true,
           },
           {
@@ -300,22 +365,43 @@ function mockBackend(): Backend {
             models: ["claude-sonnet-4-5", "claude-opus-4-1"],
             has_key: false,
           },
-          { id: "openai", name: "OpenAI", protocol: "responses", base_url: "https://api.openai.com/v1", models: ["gpt-5", "gpt-5-mini"], has_key: true },
+          {
+            id: "openai",
+            name: "OpenAI",
+            protocol: "responses",
+            base_url: "https://api.openai.com/v1",
+            models: ["gpt-5", "gpt-5-mini"],
+            has_key: true,
+          },
         ];
 
-  const meta = (model: string, out: number): Message["meta"] => ({
+  const meta = (model: string, out: number): NonNullable<Message["meta"]> => ({
     provider_id: "openrouter",
     protocol: "chat",
     model,
     created_at: now(),
     latency_ms: 1840,
     ttft_ms: 412,
-    usage: { input_tokens: 1283, cached_input_tokens: 1024, output_tokens: out },
+    usage: {
+      input_tokens: 1283,
+      cached_input_tokens: 1024,
+      output_tokens: out,
+    },
     finish_reason: "stop",
   });
 
   const sessions = new Map<string, Session>();
-  const mk = (id: string, title: string, ago: number, messages: Message[]): Session => ({
+  const getSession = (id: string): Session => {
+    const session = sessions.get(id);
+    if (!session) throw new Error(`session not found: ${id}`);
+    return session;
+  };
+  const mk = (
+    id: string,
+    title: string,
+    ago: number,
+    messages: Message[],
+  ): Session => ({
     schema_version: 1,
     id,
     title,
@@ -329,37 +415,123 @@ function mockBackend(): Backend {
     sessions.set(
       "s1",
       mk("s1", "How does the streaming pipeline work?", 60_000, [
-        { role: "user", content: "How does the streaming pipeline work? Keep it short, with a code sample.", created_at: now() },
-        { role: "assistant", content: SAMPLE_REPLY, created_at: now(), reasoning_content: "The user wants a compact explanation. I should lead with the per-frame coalescing since that's the interesting part, then the schema.", meta: meta("anthropic/claude-sonnet-4", 236) },
-        { role: "user", content: "And what happens on cancel?", created_at: now() },
-        { role: "assistant", content: "The stream is dropped, and whatever text already arrived is persisted with `finish_reason: \"cancelled\"` — so a truncated reply is still a faithful trajectory.", created_at: now(), meta: meta("anthropic/claude-sonnet-4", 41) },
+        {
+          role: "user",
+          content:
+            "How does the streaming pipeline work? Keep it short, with a code sample.",
+          created_at: now(),
+        },
+        {
+          role: "assistant",
+          content: SAMPLE_REPLY,
+          created_at: now(),
+          reasoning_content:
+            "The user wants a compact explanation. I should lead with the per-frame coalescing since that's the interesting part, then the schema.",
+          meta: meta("anthropic/claude-sonnet-4", 236),
+        },
+        {
+          role: "user",
+          content: "And what happens on cancel?",
+          created_at: now(),
+        },
+        {
+          role: "assistant",
+          content:
+            'The stream is dropped, and whatever text already arrived is persisted with `finish_reason: "cancelled"` — so a truncated reply is still a faithful trajectory.',
+          created_at: now(),
+          meta: meta("anthropic/claude-sonnet-4", 41),
+        },
       ]),
     );
-    sessions.set("s2", mk("s2", "Rust lifetimes in async closures", 3_600_000, [{ role: "user", content: "Rust lifetimes in async closures", created_at: now() }]));
-    sessions.set("s3", mk("s3", "Draft: release notes for 0.1", 86_400_000, [{ role: "user", content: "Draft: release notes for 0.1", created_at: now() }]));
-    sessions.set("s4", mk("s4", "Why does TextKit grow blocks with paragraphSpacing", 3 * 86_400_000, [{ role: "user", content: "Why?", created_at: now() }]));
+    sessions.set(
+      "s2",
+      mk("s2", "Rust lifetimes in async closures", 3_600_000, [
+        {
+          role: "user",
+          content: "Rust lifetimes in async closures",
+          created_at: now(),
+        },
+      ]),
+    );
+    sessions.set(
+      "s3",
+      mk("s3", "Draft: release notes for 0.1", 86_400_000, [
+        {
+          role: "user",
+          content: "Draft: release notes for 0.1",
+          created_at: now(),
+        },
+      ]),
+    );
+    sessions.set(
+      "s4",
+      mk(
+        "s4",
+        "Why does TextKit grow blocks with paragraphSpacing",
+        3 * 86_400_000,
+        [{ role: "user", content: "Why?", created_at: now() }],
+      ),
+    );
     if (state === "error") {
-      const s = sessions.get("s1")!;
-      s.messages.push({ role: "user", content: "One more thing…", created_at: now() });
+      const s = getSession("s1");
+      s.messages.push({
+        role: "user",
+        content: "One more thing…",
+        created_at: now(),
+      });
     }
-    if (state === "html" || state === "html-expanded" || state === "select-test") {
-      const s = sessions.get("s1")!;
-      s.messages.push({ role: "user", content: "Make me a tiny landing page.", created_at: now() });
-      s.messages.push({ role: "assistant", content: SAMPLE_HTML, created_at: now(), meta: meta("anthropic/claude-sonnet-4", 310) });
-    }
-    if (state === "svg") {
-      const s = sessions.get("s1")!;
-      s.messages.push({ role: "user", content: "Draw the cat as an SVG.", created_at: now() });
-      s.messages.push({ role: "assistant", content: SAMPLE_SVG, created_at: now(), meta: meta("anthropic/claude-sonnet-4", 120) });
-    }
-    if (state === "image" || state === "image-expanded") {
-      const s = sessions.get("s1")!;
-      s.messages.push({ role: "user", content: contentWith("What does this chart say?", [sampleImage()]), created_at: now() });
+    if (
+      state === "html" ||
+      state === "html-expanded" ||
+      state === "select-test"
+    ) {
+      const s = getSession("s1");
+      s.messages.push({
+        role: "user",
+        content: "Make me a tiny landing page.",
+        created_at: now(),
+      });
       s.messages.push({
         role: "assistant",
-        content: "Weekly active users climbed for most of the period — from roughly a third of the axis to about 90% at the highlighted bar — then eased slightly in the final week. The blue bar marks the peak.",
+        content: SAMPLE_HTML,
         created_at: now(),
-        meta: { ...meta("anthropic/claude-sonnet-4", 52)!, usage: { input_tokens: 1640, cached_input_tokens: 0, output_tokens: 52 } },
+        meta: meta("anthropic/claude-sonnet-4", 310),
+      });
+    }
+    if (state === "svg") {
+      const s = getSession("s1");
+      s.messages.push({
+        role: "user",
+        content: "Draw the cat as an SVG.",
+        created_at: now(),
+      });
+      s.messages.push({
+        role: "assistant",
+        content: SAMPLE_SVG,
+        created_at: now(),
+        meta: meta("anthropic/claude-sonnet-4", 120),
+      });
+    }
+    if (state === "image" || state === "image-expanded") {
+      const s = getSession("s1");
+      s.messages.push({
+        role: "user",
+        content: contentWith("What does this chart say?", [sampleImage()]),
+        created_at: now(),
+      });
+      s.messages.push({
+        role: "assistant",
+        content:
+          "Weekly active users climbed for most of the period — from roughly a third of the axis to about 90% at the highlighted bar — then eased slightly in the final week. The blue bar marks the peak.",
+        created_at: now(),
+        meta: {
+          ...meta("anthropic/claude-sonnet-4", 52),
+          usage: {
+            input_tokens: 1640,
+            cached_input_tokens: 0,
+            output_tokens: 52,
+          },
+        },
       });
     }
   }
@@ -367,27 +539,30 @@ function mockBackend(): Backend {
   const summaries = () =>
     [...sessions.values()]
       .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
-      .map((s) => ({ id: s.id, title: s.title, updated_at: s.updated_at, provider_id: s.provider_id, model: s.model, message_count: s.messages.length }));
+      .map((s) => ({
+        id: s.id,
+        title: s.title,
+        updated_at: s.updated_at,
+        provider_id: s.provider_id,
+        model: s.model,
+        message_count: s.messages.length,
+      }));
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   return {
     listSessions: async () => summaries(),
-    getSession: async (id) => {
-      const s = sessions.get(id);
-      if (!s) throw new Error(`session not found: ${id}`);
-      return structuredClone(s);
-    },
+    getSession: async (id) => structuredClone(getSession(id)),
     deleteSession: async (id) => {
       sessions.delete(id);
     },
     renameSession: async (id, title) => {
-      const s = sessions.get(id)!;
+      const s = getSession(id);
       s.title = title;
       return structuredClone(s);
     },
     setSessionModel: async (id, providerId, model) => {
-      const s = sessions.get(id)!;
+      const s = getSession(id);
       s.provider_id = providerId;
       s.model = model;
       return structuredClone(s);
@@ -395,15 +570,24 @@ function mockBackend(): Backend {
     runTurn: async (kind, onEvent) => {
       let s: Session;
       if (kind.kind === "send") {
-        s = kind.session_id ? sessions.get(kind.session_id)! : mk(`s${Date.now()}`, "New chat", 0, []);
+        s = kind.session_id
+          ? getSession(kind.session_id)
+          : mk(`s${Date.now()}`, "New chat", 0, []);
         s.provider_id = kind.provider_id;
         s.model = kind.model;
         if (s.messages.at(-1)?.role === "user") s.messages.pop();
-        s.messages.push({ role: "user", content: contentWith(kind.content, kind.images ?? []), created_at: now() });
-        if (s.messages.length === 1) s.title = kind.content.split("\n")[0]!.slice(0, 60) || (kind.images?.length ? "Image" : "New chat");
+        s.messages.push({
+          role: "user",
+          content: contentWith(kind.content, kind.images ?? []),
+          created_at: now(),
+        });
+        if (s.messages.length === 1)
+          s.title =
+            kind.content.split("\n")[0]?.slice(0, 60) ||
+            (kind.images?.length ? "Image" : "New chat");
         sessions.set(s.id, s);
       } else {
-        s = sessions.get(kind.session_id)!;
+        s = getSession(kind.session_id);
         while (s.messages.at(-1)?.role === "assistant") s.messages.pop();
         if (kind.kind === "edit") {
           const last = s.messages.at(-1);
@@ -415,17 +599,36 @@ function mockBackend(): Backend {
       s.updated_at = now();
       onEvent({ type: "started", session: structuredClone(s) });
 
-      if (state === "error" || textOf(s.messages.at(-1)?.content ?? "").includes("fail")) {
+      if (
+        state === "error" ||
+        textOf(s.messages.at(-1)?.content ?? "").includes("fail")
+      ) {
         await sleep(300);
-        onEvent({ type: "done", session_id: s.id, error: "HTTP 401: Invalid API key", updated_at: now() });
+        onEvent({
+          type: "done",
+          session_id: s.id,
+          error: "HTTP 401: Invalid API key",
+          updated_at: now(),
+        });
         return;
       }
 
       let cancelled = false;
       cancels.set(s.id, () => (cancelled = true));
-      const reasoning = "The user is asking a follow-up. I'll answer briefly and reuse the earlier framing.";
-      const reply = state === "streaming" ? SAMPLE_REPLY : state === "streaming-html" ? SAMPLE_HTML : "Sure — " + SAMPLE_REPLY.slice(0, 400);
-      const holdAt = state === "streaming" ? 420 : state === "streaming-html" ? 700 : Infinity;
+      const reasoning =
+        "The user is asking a follow-up. I'll answer briefly and reuse the earlier framing.";
+      const reply =
+        state === "streaming"
+          ? SAMPLE_REPLY
+          : state === "streaming-html"
+            ? SAMPLE_HTML
+            : `Sure — ${SAMPLE_REPLY.slice(0, 400)}`;
+      const holdAt =
+        state === "streaming"
+          ? 420
+          : state === "streaming-html"
+            ? 700
+            : Infinity;
       let text = "";
       let think = "";
       await sleep(250);
@@ -442,15 +645,34 @@ function mockBackend(): Backend {
         await sleep(holdAt < Infinity ? 40 : 12);
         if (text.length > holdAt) {
           // Hold mid-stream so screenshots catch the live state.
-          await new Promise<void>((r) => (cancels.set(s.id, () => ((cancelled = true), r()))));
+          await new Promise<void>((r) =>
+            cancels.set(s.id, () => {
+              cancelled = true;
+              r();
+            }),
+          );
           break;
         }
       }
       cancels.delete(s.id);
-      const message: Message = { role: "assistant", content: text, reasoning_content: think, created_at: now(), meta: { ...meta(s.model, 120)!, finish_reason: cancelled ? "cancelled" : "stop" } };
+      const message: Message = {
+        role: "assistant",
+        content: text,
+        reasoning_content: think,
+        created_at: now(),
+        meta: {
+          ...meta(s.model, 120),
+          finish_reason: cancelled ? "cancelled" : "stop",
+        },
+      };
       s.messages.push(message);
       s.updated_at = now();
-      onEvent({ type: "done", session_id: s.id, message, updated_at: s.updated_at });
+      onEvent({
+        type: "done",
+        session_id: s.id,
+        message,
+        updated_at: s.updated_at,
+      });
     },
     cancelTurn: async (id) => {
       const c = cancels.get(id);
@@ -463,8 +685,14 @@ function mockBackend(): Backend {
     saveProvider: async (input) => {
       const { api_key, ...p } = input;
       const existing = providers.find((x) => x.id === p.id);
-      const view: ProviderView = { ...p, has_key: api_key !== undefined ? api_key !== "" : (existing?.has_key ?? false) };
-      providers = existing ? providers.map((x) => (x.id === p.id ? view : x)) : [...providers, view];
+      const view: ProviderView = {
+        ...p,
+        has_key:
+          api_key !== undefined ? api_key !== "" : (existing?.has_key ?? false),
+      };
+      providers = existing
+        ? providers.map((x) => (x.id === p.id ? view : x))
+        : [...providers, view];
       return structuredClone(providers);
     },
     deleteProvider: async (id) => {
@@ -473,7 +701,9 @@ function mockBackend(): Backend {
     },
     fetchModels: async (protocol) => {
       await sleep(400);
-      return protocol === "anthropic" ? ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"] : ["gpt-5", "gpt-5-mini", "o4-mini"];
+      return protocol === "anthropic"
+        ? ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"]
+        : ["gpt-5", "gpt-5-mini", "o4-mini"];
     },
 
     getSettings: async () => ({ ...settings }),
@@ -486,8 +716,14 @@ function mockBackend(): Backend {
     exportSession: async () => {},
 
     popupMenu: async (items) => {
-      const label = items.filter((i) => !i.separator && i.enabled !== false).map((i) => i.label).join(" / ");
-      const pick = window.prompt(`Context menu:\n${label}\n\nType an item id`, items.find((i) => i.id)?.id ?? "");
+      const label = items
+        .filter((i) => !i.separator && i.enabled !== false)
+        .map((i) => i.label)
+        .join(" / ");
+      const pick = window.prompt(
+        `Context menu:\n${label}\n\nType an item id`,
+        items.find((i) => i.id)?.id ?? "",
+      );
       if (pick) menuCb?.(pick);
     },
     onMenu: async (cb) => {
@@ -513,7 +749,8 @@ function mockBackend(): Backend {
         input.click();
       }),
     onDrop: async (cb, hover) => {
-      const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+      const hasFiles = (e: DragEvent) =>
+        Array.from(e.dataTransfer?.types ?? []).includes("Files");
       const over = (e: DragEvent) => {
         if (!hasFiles(e)) return;
         e.preventDefault();
@@ -526,7 +763,9 @@ function mockBackend(): Backend {
         if (!hasFiles(e)) return;
         e.preventDefault();
         hover(false);
-        const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/") || isImagePath(f.name));
+        const files = Array.from(e.dataTransfer?.files ?? []).filter(
+          (f) => f.type.startsWith("image/") || isImagePath(f.name),
+        );
         if (files.length) cb(files);
       };
       window.addEventListener("dragenter", over);
@@ -549,7 +788,13 @@ function mockBackend(): Backend {
     showWindow: async () => {},
     version: async () => "0.1.0",
     // `?update=1` pretends the feed has 0.2.0; installing "downloads" for a second and stops.
-    checkUpdate: async () => (params.has("update") ? { version: "0.2.0", notes: "Live HTML preview, line numbers, trajectory column." } : null),
+    checkUpdate: async () =>
+      params.has("update")
+        ? {
+            version: "0.2.0",
+            notes: "Live HTML preview, line numbers, trajectory column.",
+          }
+        : null,
     installUpdate: async (onProgress) => {
       for (let i = 1; i <= 10; i++) {
         await sleep(100);

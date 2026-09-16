@@ -2,7 +2,12 @@
 // "Super+Shift+KeyK") — to and from what the user sees (⌥ Space, ⇧⌘K) and types.
 
 const MODIFIERS = ["Control", "Alt", "Shift", "Super"] as const;
-const MOD_GLYPH: Record<string, string> = { Control: "⌃", Alt: "⌥", Shift: "⇧", Super: "⌘" };
+const MOD_GLYPH: Record<string, string> = {
+  Control: "⌃",
+  Alt: "⌥",
+  Shift: "⇧",
+  Super: "⌘",
+};
 const KEY_GLYPH: Record<string, string> = {
   Space: "Space",
   Enter: "↩",
@@ -51,8 +56,8 @@ function modifierOf(part: string): string | null {
 
 function keyGlyph(code: string): string {
   if (KEY_GLYPH[code]) return KEY_GLYPH[code];
-  if (/^Key[A-Z]$/.test(code)) return code[3]!;
-  if (/^Digit\d$/.test(code)) return code[5]!;
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
   return code;
 }
 
@@ -73,8 +78,19 @@ export function prettyShortcut(accel: string): string {
  *  a bare modifier, or a key with no modifier (that would swallow typing everywhere). */
 export function shortcutFromEvent(e: KeyboardEvent): string | null {
   const code = e.code;
-  if (!code || /^(Control|Alt|Shift|Meta|OS)(Left|Right)?$/.test(code) || code === "CapsLock" || code === "Fn") return null;
-  const mods = [e.ctrlKey && "Control", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Super"].filter((m): m is string => !!m);
+  if (
+    !code ||
+    /^(Control|Alt|Shift|Meta|OS)(Left|Right)?$/.test(code) ||
+    code === "CapsLock" ||
+    code === "Fn"
+  )
+    return null;
+  const mods = [
+    e.ctrlKey && "Control",
+    e.altKey && "Alt",
+    e.shiftKey && "Shift",
+    e.metaKey && "Super",
+  ].filter((m): m is string => !!m);
   if (mods.length === 0 && !/^F\d{1,2}$/.test(code)) return null;
   return [...mods, code].join("+");
 }

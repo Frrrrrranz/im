@@ -20,8 +20,15 @@ interface Options {
 
 export function createResizer(opts: Options): HTMLElement {
   const root = document.documentElement;
-  const current = () => parseFloat(getComputedStyle(root).getPropertyValue(opts.varName)) || opts.fallback;
-  const el = h("div", { class: `resizer ${opts.edge}`, role: "separator", "aria-orientation": "vertical", title: "Drag to resize; double-click to reset" });
+  const current = () =>
+    parseFloat(getComputedStyle(root).getPropertyValue(opts.varName)) ||
+    opts.fallback;
+  const el = h("div", {
+    class: `resizer ${opts.edge}`,
+    role: "separator",
+    "aria-orientation": "vertical",
+    title: "Drag to resize; double-click to reset",
+  });
 
   el.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
@@ -32,7 +39,15 @@ export function createResizer(opts: Options): HTMLElement {
     document.body.classList.add("resizing");
     const move = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
-      w = Math.round(Math.min(opts.max(), Math.max(opts.min, startW + (opts.edge === "right" ? dx : -dx) * (opts.factor ?? 1))));
+      w = Math.round(
+        Math.min(
+          opts.max(),
+          Math.max(
+            opts.min,
+            startW + (opts.edge === "right" ? dx : -dx) * (opts.factor ?? 1),
+          ),
+        ),
+      );
       root.style.setProperty(opts.varName, `${w}px`);
     };
     const up = () => {
@@ -53,11 +68,19 @@ export function createResizer(opts: Options): HTMLElement {
 
 /** Current value of a column-width variable (the live one during a drag). */
 export function columnWidth(varName: string, fallback: number): number {
-  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(varName)) || fallback;
+  return (
+    parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(varName),
+    ) || fallback
+  );
 }
 
 /** Push saved widths into the stylesheet variables (absent = default). */
-export function applyColumnWidths(sidebar: number | undefined, inspector: number | undefined, column: number | undefined) {
+export function applyColumnWidths(
+  sidebar: number | undefined,
+  inspector: number | undefined,
+  column: number | undefined,
+) {
   const root = document.documentElement.style;
   for (const [name, value] of [
     ["--sidebar-w", sidebar],

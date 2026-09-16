@@ -5,14 +5,43 @@
 
 import * as actions from "../actions";
 import { h, icon, replaceChildren } from "../dom";
-import { store, type State } from "../state";
+import { type State, store } from "../state";
 
 export function createComposer(): HTMLElement {
-  const textarea = h("textarea", { class: "input", rows: 1, placeholder: "Message", spellcheck: true, autofocus: true }) as HTMLTextAreaElement;
-  const button = h("button", { class: "send", type: "button", "aria-label": "Send" }, icon("arrowUp")) as HTMLButtonElement;
-  const editBar = h("div", { class: "edit-bar" }, h("span", null, "Editing last message"), h("button", { class: "link", onclick: () => actions.cancelEdit() }, "Cancel"));
+  const textarea = h("textarea", {
+    class: "input",
+    rows: 1,
+    placeholder: "Message",
+    spellcheck: true,
+    autofocus: true,
+  }) as HTMLTextAreaElement;
+  const button = h(
+    "button",
+    { class: "send", type: "button", "aria-label": "Send" },
+    icon("arrowUp"),
+  ) as HTMLButtonElement;
+  const editBar = h(
+    "div",
+    { class: "edit-bar" },
+    h("span", null, "Editing last message"),
+    h(
+      "button",
+      { class: "link", onclick: () => actions.cancelEdit() },
+      "Cancel",
+    ),
+  );
   const strip = h("div", { class: "attachments", hidden: true });
-  const root = h("div", { class: "composer" }, editBar, h("div", { class: "field" }, strip, h("div", { class: "field-row" }, textarea, button)));
+  const root = h(
+    "div",
+    { class: "composer" },
+    editBar,
+    h(
+      "div",
+      { class: "field" },
+      strip,
+      h("div", { class: "field-row" }, textarea, button),
+    ),
+  );
 
   let attachments: string[] = [];
 
@@ -32,7 +61,18 @@ export function createComposer(): HTMLElement {
           "div",
           { class: "attachment" },
           h("img", { src: url, alt: "" }),
-          h("button", { class: "attachment-remove", type: "button", title: "Remove", "aria-label": "Remove image", onclick: () => setAttachments(attachments.filter((_, j) => j !== i)) }, icon("close")),
+          h(
+            "button",
+            {
+              class: "attachment-remove",
+              type: "button",
+              title: "Remove",
+              "aria-label": "Remove image",
+              onclick: () =>
+                setAttachments(attachments.filter((_, j) => j !== i)),
+            },
+            icon("close"),
+          ),
         ),
       ),
     );
@@ -51,7 +91,9 @@ export function createComposer(): HTMLElement {
     updateButton(store.state);
   });
   textarea.addEventListener("paste", (e) => {
-    const files = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+    const files = Array.from(e.clipboardData?.files ?? []).filter((f) =>
+      f.type.startsWith("image/"),
+    );
     if (files.length === 0) return;
     e.preventDefault();
     void actions.attachImages(files);
@@ -73,7 +115,13 @@ export function createComposer(): HTMLElement {
   };
 
   textarea.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      !e.altKey &&
+      !e.metaKey &&
+      !e.ctrlKey
+    ) {
       if (composing || e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       submit();
@@ -94,7 +142,8 @@ export function createComposer(): HTMLElement {
     button.replaceChildren(icon(streaming ? "stop" : "arrowUp"));
     button.classList.toggle("stop", streaming);
     button.setAttribute("aria-label", streaming ? "Stop" : "Send");
-    button.disabled = !streaming && !textarea.value.trim() && attachments.length === 0;
+    button.disabled =
+      !streaming && !textarea.value.trim() && attachments.length === 0;
   };
 
   let lastSession: string | null | undefined;
@@ -102,7 +151,11 @@ export function createComposer(): HTMLElement {
     editBar.hidden = !s.editing;
     root.classList.toggle("editing", s.editing);
     const model = actions.currentModel();
-    textarea.placeholder = model?.model ? `Message ${model.model}` : s.providers.length ? "Choose a model (⌘K)" : "Message";
+    textarea.placeholder = model?.model
+      ? `Message ${model.model}`
+      : s.providers.length
+        ? "Choose a model (⌘K)"
+        : "Message";
     updateButton(s);
     if (s.currentId !== lastSession) {
       lastSession = s.currentId;

@@ -22,7 +22,8 @@ export async function normalizeImage(source: ImageSource): Promise<string> {
   const img = await decode(blob);
   try {
     const edge = Math.max(img.width, img.height);
-    if (KEEP.has(mime) && edge <= MAX_EDGE && blob.size <= MAX_BYTES) return await toDataUrl(blob, mime);
+    if (KEEP.has(mime) && edge <= MAX_EDGE && blob.size <= MAX_BYTES)
+      return await toDataUrl(blob, mime);
     let scale = Math.min(1, MAX_EDGE / edge);
     let type = mime === "image/png" ? "image/png" : "image/jpeg";
     for (let i = 0; i < 6; i++) {
@@ -47,7 +48,12 @@ interface Decoded {
 async function decode(blob: Blob): Promise<Decoded> {
   try {
     const bitmap = await createImageBitmap(blob);
-    return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
+    return {
+      source: bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+      close: () => bitmap.close(),
+    };
   } catch {
     // Formats createImageBitmap refuses but <img> still renders (WebKit: HEIC, TIFF).
     const url = URL.createObjectURL(blob);
@@ -59,7 +65,12 @@ async function decode(blob: Blob): Promise<Decoded> {
       URL.revokeObjectURL(url);
       throw new Error("not an image");
     }
-    return { source: el, width: el.naturalWidth, height: el.naturalHeight, close: () => URL.revokeObjectURL(url) };
+    return {
+      source: el,
+      width: el.naturalWidth,
+      height: el.naturalHeight,
+      close: () => URL.revokeObjectURL(url),
+    };
   }
 }
 
@@ -67,7 +78,9 @@ function draw(img: Decoded, scale: number, type: string): string {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(img.width * scale));
   canvas.height = Math.max(1, Math.round(img.height * scale));
-  canvas.getContext("2d")!.drawImage(img.source, 0, 0, canvas.width, canvas.height);
+  canvas
+    .getContext("2d")
+    ?.drawImage(img.source, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL(type, 0.9);
 }
 
@@ -93,10 +106,22 @@ function toDataUrl(blob: Blob, mime: string): Promise<string> {
 }
 
 function sniff(b: Uint8Array): string {
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
+    return "image/png";
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
-  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return "image/gif";
-  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38)
+    return "image/gif";
+  if (
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50
+  )
+    return "image/webp";
   return "";
 }
 

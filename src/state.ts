@@ -1,4 +1,10 @@
-import type { ProviderView, Session, SessionSummary, Settings, UpdateState } from "./types";
+import type {
+  ProviderView,
+  Session,
+  SessionSummary,
+  Settings,
+  UpdateState,
+} from "./types";
 
 export interface LiveTurn {
   text: string;
@@ -43,7 +49,14 @@ class Store {
     session: null,
     draft: null,
     providers: [],
-    settings: { schema_version: 1, appearance: "system", max_tokens: 8192, sidebar_visible: true, inspector_visible: false, quick_shortcut: "Alt+Space" },
+    settings: {
+      schema_version: 1,
+      appearance: "system",
+      max_tokens: 8192,
+      sidebar_visible: true,
+      inspector_visible: false,
+      quick_shortcut: "Alt+Space",
+    },
     live: {},
     errors: {},
     view: "chat",
@@ -75,7 +88,12 @@ class Store {
   appendLive(sessionId: string, kind: "text" | "reasoning", delta: string) {
     let live = this.state.live[sessionId];
     if (!live) {
-      live = { text: "", reasoning: "", startedAt: performance.now(), answering: false };
+      live = {
+        text: "",
+        reasoning: "",
+        startedAt: performance.now(),
+        answering: false,
+      };
       this.state.live[sessionId] = live;
     }
     if (kind === "text") {

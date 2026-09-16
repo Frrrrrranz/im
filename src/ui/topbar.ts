@@ -3,13 +3,22 @@
 
 import * as actions from "../actions";
 import { h, icon, replaceChildren } from "../dom";
-import { store, type State } from "../state";
+import { type State, store } from "../state";
 import type { ProviderView } from "../types";
 
 export function createTopbar(): HTMLElement {
-  const modelBtn = h("button", { class: "model-btn", title: "Choose Model (⌘K)", onclick: () => actions.togglePicker() });
+  const modelBtn = h("button", {
+    class: "model-btn",
+    title: "Choose Model (⌘K)",
+    onclick: () => actions.togglePicker(),
+  });
   const picker = createPicker();
-  const root = h("header", { class: "topbar", "data-tauri-drag-region": "" }, modelBtn, picker);
+  const root = h(
+    "header",
+    { class: "topbar", "data-tauri-drag-region": "" },
+    modelBtn,
+    picker,
+  );
 
   const render = (s: State) => {
     const m = actions.currentModel();
@@ -17,8 +26,14 @@ export function createTopbar(): HTMLElement {
     modelBtn.hidden = s.view !== "chat";
     replaceChildren(
       modelBtn,
-      h("span", { class: "model-name" }, m?.model || (s.providers.length ? "Choose a model" : "No provider")),
-      provider && s.providers.length > 1 ? h("span", { class: "model-provider" }, provider.name) : null,
+      h(
+        "span",
+        { class: "model-name" },
+        m?.model || (s.providers.length ? "Choose a model" : "No provider"),
+      ),
+      provider && s.providers.length > 1
+        ? h("span", { class: "model-provider" }, provider.name)
+        : null,
       icon("chevron"),
     );
     modelBtn.classList.toggle("open", s.pickerOpen);
@@ -36,9 +51,18 @@ interface Row {
 }
 
 function createPicker(): HTMLElement {
-  const input = h("input", { class: "picker-search", placeholder: "Search models", spellcheck: false }) as HTMLInputElement;
+  const input = h("input", {
+    class: "picker-search",
+    placeholder: "Search models",
+    spellcheck: false,
+  }) as HTMLInputElement;
   const list = h("div", { class: "picker-list", role: "listbox" });
-  const root = h("div", { class: "picker", role: "dialog", hidden: true }, input, list);
+  const root = h(
+    "div",
+    { class: "picker", role: "dialog", hidden: true },
+    input,
+    list,
+  );
   root.addEventListener("mousedown", (e) => e.stopPropagation());
 
   let rows: Row[] = [];
@@ -50,14 +74,25 @@ function createPicker(): HTMLElement {
     const current = actions.currentModel();
     rows = [];
     for (const p of providers) {
-      for (const m of p.models) if (!q || m.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)) rows.push({ provider: p, model: m });
+      for (const m of p.models)
+        if (
+          !q ||
+          m.toLowerCase().includes(q) ||
+          p.name.toLowerCase().includes(q)
+        )
+          rows.push({ provider: p, model: m });
     }
     // Anything typed can be used verbatim with the current provider.
     const typed = input.value.trim();
-    const target = providers.find((p) => p.id === current?.providerId) ?? providers[0];
-    if (typed && target && !rows.some((r) => r.model === typed)) rows.push({ provider: target, model: typed, custom: true });
+    const target =
+      providers.find((p) => p.id === current?.providerId) ?? providers[0];
+    if (typed && target && !rows.some((r) => r.model === typed))
+      rows.push({ provider: target, model: typed, custom: true });
 
-    const currentIdx = rows.findIndex((r) => r.provider.id === current?.providerId && r.model === current?.model);
+    const currentIdx = rows.findIndex(
+      (r) =>
+        r.provider.id === current?.providerId && r.model === current?.model,
+    );
     highlighted = Math.max(0, Math.min(highlighted, rows.length - 1));
     if (!q && currentIdx >= 0) highlighted = currentIdx;
 
@@ -67,7 +102,16 @@ function createPicker(): HTMLElement {
       const label = r.custom ? "Use as typed" : r.provider.name;
       if (label !== group) {
         group = label;
-        items.push(h("div", { class: "picker-group" }, label, r.custom ? "" : h("span", { class: "picker-proto" }, r.provider.protocol)));
+        items.push(
+          h(
+            "div",
+            { class: "picker-group" },
+            label,
+            r.custom
+              ? ""
+              : h("span", { class: "picker-proto" }, r.provider.protocol),
+          ),
+        );
       }
       const isCurrent = i === currentIdx;
       items.push(
@@ -87,19 +131,41 @@ function createPicker(): HTMLElement {
           },
           h("span", { class: "picker-model" }, r.model),
           isCurrent ? icon("check") : null,
-          r.provider.has_key ? null : h("span", { class: "picker-warn", title: "No API key" }, "no key"),
+          r.provider.has_key
+            ? null
+            : h(
+                "span",
+                { class: "picker-warn", title: "No API key" },
+                "no key",
+              ),
         ),
       );
     });
-    replaceChildren(list, items.length ? items : [h("div", { class: "picker-empty" }, "No models. Add some in Settings.")]);
+    replaceChildren(
+      list,
+      items.length
+        ? items
+        : [
+            h(
+              "div",
+              { class: "picker-empty" },
+              "No models. Add some in Settings.",
+            ),
+          ],
+    );
     scrollActive();
   };
 
   const paintHighlight = () => {
-    list.querySelectorAll(".picker-item").forEach((el, i) => el.classList.toggle("active", i === highlighted));
+    list.querySelectorAll(".picker-item").forEach((el, i) => {
+      el.classList.toggle("active", i === highlighted);
+    });
     scrollActive();
   };
-  const scrollActive = () => list.querySelector(".picker-item.active")?.scrollIntoView({ block: "nearest" });
+  const scrollActive = () =>
+    list
+      .querySelector(".picker-item.active")
+      ?.scrollIntoView({ block: "nearest" });
 
   const choose = (i: number) => {
     const r = rows[i];
@@ -129,7 +195,11 @@ function createPicker(): HTMLElement {
   });
 
   const closeOnOutsideClick = (e: MouseEvent) => {
-    if (!root.contains(e.target as Node) && !(e.target as HTMLElement).closest(".model-btn")) actions.togglePicker(false);
+    if (
+      !root.contains(e.target as Node) &&
+      !(e.target as HTMLElement).closest(".model-btn")
+    )
+      actions.togglePicker(false);
   };
 
   let wasOpen = false;

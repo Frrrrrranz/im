@@ -33,7 +33,7 @@ if [ "${INSPECTOR:-0}" = "1" ]; then
   sed -i '' -E 's/"sidebar_visible": (true|false)/"sidebar_visible": \1, "inspector_visible": true/' "$data/settings.json"
 fi
 if [ "${PROVIDER:-}" = "mock" ]; then
-  sed -i '' 's/"default_provider_id": "openrouter", "default_model": "anthropic\/claude-sonnet-4"/"default_provider_id": "mock", "default_model": "mock-large"/' "$data/settings.json"
+  sed -i '' 's/"default_provider_id": "openrouter"/"default_provider_id": "mock"/; s/"default_model": "anthropic\/claude-sonnet-4"/"default_model": "mock-large"/' "$data/settings.json"
   for f in "$data"/sessions/*.json; do
     sed -i '' 's/"provider_id": "openrouter"/"provider_id": "mock"/; s/"model": "anthropic\/claude-sonnet-4"/"model": "mock-large"/' "$f"
   done
