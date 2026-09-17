@@ -674,6 +674,18 @@ html.windows .chat {
   border-radius: 16px 16px 0 0;
   overflow: hidden;
 }
+html.windows body:not(.no-inspector) .chat {
+  border-top-right-radius: 0;
+}
+html.windows body:not(.no-sidebar) .main {
+  --topbar-left: 0px;
+}
+html.windows .window-controls:not(.right) {
+  left: calc(var(--controls-left) + 4px);
+}
+html.windows .session + .session {
+  margin-top: 2px;
+}
 /* ---- transcript ------------------------------------------------------ */
 
 .transcript {
