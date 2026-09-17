@@ -154,7 +154,7 @@ export function createComposer(): HTMLElement {
     textarea.placeholder = model?.model
       ? `Message ${model.model}`
       : s.providers.length
-        ? "Choose a model (⌘K)"
+        ? "Choose a model"
         : "Message";
     updateButton(s);
     if (s.currentId !== lastSession) {

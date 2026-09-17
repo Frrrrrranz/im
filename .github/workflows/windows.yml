@@ -1,0 +1,52 @@
+name: windows
+
+on:
+  push:
+    branches: [main, feat/windows-support]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm run biome:check
+      - run: npm run typecheck
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: npm run tauri build -- --debug --bundles nsis
+      - name: Main window close exits the app
+        shell: pwsh
+        env:
+          IM_SCENARIO: close
+        run: |
+          $env:IM_DATA_DIR = Join-Path $env:RUNNER_TEMP "im-close-smoke"
+          $process = Start-Process -FilePath "src-tauri/target/debug/im.exe" -PassThru -WindowStyle Hidden
+          try {
+            if (-not $process.WaitForExit(20000)) {
+              throw "im.exe did not exit after the main window closed."
+            }
+            if ($process.ExitCode -ne 0) {
+              throw "im.exe exited with code $($process.ExitCode)."
+            }
+          } finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: im-windows-x64
+          path: src-tauri/target/debug/bundle/nsis/*.exe
+          if-no-files-found: error

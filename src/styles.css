@@ -85,6 +85,15 @@ body {
   -webkit-user-select: none;
 }
 
+/* Windows has no macOS vibrancy behind transparent webview regions. */
+html.windows,
+html.windows body {
+  background: var(--canvas);
+}
+html.windows {
+  --controls-left: 10px;
+}
+
 button,
 input,
 textarea,
@@ -498,7 +507,9 @@ body.no-inspector .inspector-inner {
 }
 /* Outside Tauri there is no vibrancy layer; stand in for the sidebar material. */
 html.mock .sidebar,
-html.mock .inspector {
+html.mock .inspector,
+html.windows .sidebar,
+html.windows .inspector {
   background: light-dark(#e9e9eb, #2a2a2c);
 }
 

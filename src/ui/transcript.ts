@@ -316,7 +316,7 @@ function renderMessage(
     if (text) el.append(h("div", { class: "bubble" }, plainText(text)));
     tools.push(toolButton("copy", "Copy", () => actions.copyText(text)));
     if (isLast)
-      tools.push(toolButton("pencil", "Edit (⌘E)", () => actions.editLast()));
+      tools.push(toolButton("pencil", "Edit", () => actions.editLast()));
   } else {
     const reasoning = el.querySelector(
       ":scope > details.reasoning",
@@ -347,7 +347,7 @@ function renderMessage(
     );
     if (isLast)
       tools.push(
-        toolButton("redo", "Regenerate (⌘R)", () => void actions.regenerate()),
+        toolButton("redo", "Regenerate", () => void actions.regenerate()),
       );
     const meta = turnMeta(m, { model: true });
     if (meta)

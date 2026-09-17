@@ -2,6 +2,7 @@ import * as actions from "./actions";
 import { createBackend, isTauri, sampleImage } from "./api";
 import { h, requireElement } from "./dom";
 import { normalizeImage } from "./images";
+import { isWindows } from "./platform";
 import { store } from "./state";
 import { createComposer } from "./ui/composer";
 import { createInspector } from "./ui/inspector";
@@ -16,6 +17,7 @@ import { createTopbar } from "./ui/topbar";
 import { createTranscript } from "./ui/transcript";
 
 async function main() {
+  if (isTauri && isWindows) document.documentElement.classList.add("windows");
   if (isTauri) forwardErrors();
   const backend = await createBackend();
   actions.setBackend(backend);
@@ -143,8 +145,14 @@ async function main() {
   const scenario = await backend.scenario().catch(() => null);
   if (scenario) applyScenario(scenario);
   // A quiet look at the release feed once the UI is up; the gear gets a dot if there is something.
-  if (isTauri || new URLSearchParams(location.search).has("update")) {
-    setTimeout(() => void actions.checkForUpdates(), isTauri ? 4000 : 300);
+  if (
+    (isTauri && !isWindows) ||
+    new URLSearchParams(location.search).has("update")
+  ) {
+    setTimeout(
+      () => void actions.checkForUpdates(),
+      isTauri && !isWindows ? 4000 : 300,
+    );
     setInterval(() => void actions.checkForUpdates(), 6 * 60 * 60 * 1000);
   }
 }
@@ -276,7 +284,7 @@ function applyScenario({
       });
       break;
     case "close":
-      // Debug: ask the window to close the way the red button does; it must hide, not die.
+      // Debug: exercise the native close path (hide on macOS, exit on Windows).
       setTimeout(
         () =>
           void import("@tauri-apps/api/window").then((m) =>

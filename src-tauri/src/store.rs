@@ -86,8 +86,59 @@ fn write_atomic(path: &Path, bytes: &[u8], secret: bool) -> Result<()> {
         f.write_all(bytes)?;
         f.sync_all()?;
     }
-    fs::rename(&tmp, path)?;
+    replace_file(&tmp, path)?;
     Ok(())
+}
+
+/// Replace a file without failing when the destination already exists.
+///
+/// `rename` replaces an existing file on Unix, but Windows requires the
+/// destination to be removed first. Removing it would leave a crash window in
+/// every settings/session save, so use the native atomic replacement primitive
+/// on Windows and retain rename for the first write and Unix.
+fn replace_file(tmp: &Path, path: &Path) -> Result<()> {
+    #[cfg(windows)]
+    {
+        if path.exists() {
+            return replace_file_windows(tmp, path);
+        }
+    }
+    fs::rename(tmp, path).map_err(StoreError::from)
+}
+
+#[cfg(windows)]
+fn replace_file_windows(tmp: &Path, path: &Path) -> Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn ReplaceFileW(
+            replaced_file_name: *const u16,
+            replacement_file_name: *const u16,
+            backup_file_name: *const u16,
+            replace_flags: u32,
+            exclude: *mut std::ffi::c_void,
+            reserved: *mut std::ffi::c_void,
+        ) -> i32;
+    }
+
+    let replaced: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let replacement: Vec<u16> = tmp.as_os_str().encode_wide().chain(Some(0)).collect();
+    let ok = unsafe {
+        ReplaceFileW(
+            replaced.as_ptr(),
+            replacement.as_ptr(),
+            std::ptr::null(),
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        Err(std::io::Error::last_os_error().into())
+    } else {
+        Ok(())
+    }
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Option<T>> {
@@ -286,6 +337,55 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::new(dir.path().to_path_buf()).unwrap();
         (dir, store)
+    }
+
+    #[test]
+    fn repeated_writes_replace_existing_files() {
+        let (dir, store) = store();
+
+        let mut settings = store.settings().unwrap();
+        settings.appearance = Appearance::Dark;
+        store.save_settings(&settings).unwrap();
+        settings.appearance = Appearance::Light;
+        store.save_settings(&settings).unwrap();
+        assert_eq!(store.settings().unwrap().appearance, Appearance::Light);
+
+        let mut session = store.new_session("provider", "model", None);
+        session.messages.push(Message::user("first", now_rfc3339()));
+        store.save_session(&session).unwrap();
+        session.messages[0] = Message::user("second", now_rfc3339());
+        store.save_session(&session).unwrap();
+        assert_eq!(store.session(&session.id).unwrap().messages[0].content.text(), "second");
+
+        let mut provider = Provider {
+            id: "provider".into(),
+            name: "First".into(),
+            protocol: Protocol::Chat,
+            base_url: "https://example.com/v1".into(),
+            models: vec!["model".into()],
+        };
+        store.upsert_provider(provider.clone()).unwrap();
+        provider.name = "Second".into();
+        store.upsert_provider(provider).unwrap();
+        assert_eq!(store.provider("provider").unwrap().unwrap().name, "Second");
+
+        store.set_api_key("provider", Some("first-key")).unwrap();
+        store.set_api_key("provider", Some("second-key")).unwrap();
+        assert_eq!(store.api_key("provider").unwrap().as_deref(), Some("second-key"));
+
+        let export = dir.path().join("export.jsonl");
+        fs::write(&export, b"old export").unwrap();
+        assert_eq!(store.export_jsonl(&export).unwrap(), 1);
+        assert!(!fs::read_to_string(&export).unwrap().contains("old export"));
+    }
+
+    #[test]
+    fn unicode_data_directory_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path().join("中文 data")).unwrap();
+        store.set_api_key("provider", Some("first-key")).unwrap();
+        store.set_api_key("provider", Some("second-key")).unwrap();
+        assert_eq!(store.api_key("provider").unwrap().as_deref(), Some("second-key"));
     }
 
     #[test]

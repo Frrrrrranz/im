@@ -48,6 +48,7 @@ pub fn install(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
         ..Default::default()
     };
 
+    #[cfg(target_os = "macos")]
     let app_menu = SubmenuBuilder::new(app, "im")
         .item(&PredefinedMenuItem::about(app, Some("About im"), Some(about))?)
         .item(&MenuItem::with_id(app, "check_updates", "Check for Updates…", true, None::<&str>)?)
@@ -61,6 +62,13 @@ pub fn install(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
         .show_all()
         .separator()
         .quit()
+        .build()?;
+
+    #[cfg(not(target_os = "macos"))]
+    let app_menu = SubmenuBuilder::new(app, "Help")
+        .item(&PredefinedMenuItem::about(app, Some("About im"), Some(about))?)
+        .item(&MenuItem::with_id(app, "check_updates", "Check for Updates…", false, None::<&str>)?)
+        .item(&MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+Comma"))?)
         .build()?;
 
     let file_menu = SubmenuBuilder::new(app, "File")
@@ -132,7 +140,14 @@ pub fn install(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
         match id {
             "close" => {
                 if let Some(w) = app.get_webview_window("main") {
+                    #[cfg(target_os = "macos")]
                     let _ = w.hide();
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        // Windows users expect File → Close to end the app,
+                        // matching the title-bar close button.
+                        let _ = w.close();
+                    }
                 }
             }
             _ => {

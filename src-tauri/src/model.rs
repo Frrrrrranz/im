@@ -294,6 +294,13 @@ fn default_true() -> bool {
     true
 }
 pub fn default_quick_shortcut() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        // Alt+Space opens the native window menu on Windows. Keep Quick Input
+        // opt-in there instead of stealing a system-reserved combination.
+        return String::new();
+    }
+    #[cfg(not(target_os = "windows"))]
     "Alt+Space".into()
 }
 

@@ -8,7 +8,7 @@ export function createSidebar(): HTMLElement {
     "button",
     {
       class: "nav-row",
-      title: "New Chat (⌘N)",
+      title: "New Chat",
       onclick: () => actions.newChat(),
     },
     icon("compose"),
@@ -21,7 +21,7 @@ export function createSidebar(): HTMLElement {
     "button",
     {
       class: "sidebar-foot",
-      title: "Settings (⌘,)",
+      title: "Settings",
       "aria-label": "Settings",
       onclick: () =>
         store.state.view === "settings"
@@ -144,7 +144,7 @@ export function createWindowControls(): HTMLElement {
       "button",
       {
         class: "icon-btn",
-        title: "Toggle Sidebar (⌃⌘S)",
+        title: "Toggle Sidebar",
         "aria-label": "Toggle Sidebar",
         onclick: () => actions.toggleSidebar(),
       },
@@ -162,7 +162,7 @@ export function createInspectorControls(): HTMLElement {
       "button",
       {
         class: "icon-btn",
-        title: "Toggle Trajectory (⌥⌘T)",
+        title: "Toggle Trajectory",
         "aria-label": "Toggle Trajectory",
         onclick: () => actions.toggleInspector(),
       },

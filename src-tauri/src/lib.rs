@@ -312,6 +312,19 @@ pub fn run() {
                     });
                 }
 
+                // The hidden quick window keeps Tauri alive after main is
+                // destroyed. On Windows, closing main must exit the app instead.
+                #[cfg(target_os = "windows")]
+                {
+                    let handle = app.handle().clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                            handle.exit(0);
+                        }
+                    });
+                }
+
                 // The frontend shows the window once it has rendered; if it never
                 // does (a startup exception), show it anyway so the failure is visible.
                 let w = window.clone();

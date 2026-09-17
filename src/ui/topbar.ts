@@ -9,7 +9,7 @@ import type { ProviderView } from "../types";
 export function createTopbar(): HTMLElement {
   const modelBtn = h("button", {
     class: "model-btn",
-    title: "Choose Model (⌘K)",
+    title: "Choose Model",
     onclick: () => actions.togglePicker(),
   });
   const picker = createPicker();

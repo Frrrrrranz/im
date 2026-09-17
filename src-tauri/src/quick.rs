@@ -224,7 +224,7 @@ fn access_granted() -> bool {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        true
+        false
     }
 }
 
@@ -312,7 +312,7 @@ pub fn quick_request_access() -> bool {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        true
+        false
     }
 }
 

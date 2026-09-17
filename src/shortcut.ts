@@ -48,7 +48,7 @@ function modifierOf(part: string): string | null {
     case "meta":
     case "cmdorctrl":
     case "commandorcontrol":
-      return "Super";
+      return IS_MACOS ? "Super" : "Control";
     default:
       return null;
   }
@@ -71,7 +71,11 @@ export function prettyShortcut(accel: string): string {
     .map((m) => MOD_GLYPH[m])
     .join("");
   const k = keyGlyph(key);
-  return k.length > 1 ? `${glyphs} ${k}`.trim() : `${glyphs}${k}`;
+  if (IS_MACOS) return k.length > 1 ? `${glyphs} ${k}`.trim() : `${glyphs}${k}`;
+  const labels = MODIFIERS.filter((m) => mods.has(m)).map((m) =>
+    m === "Control" ? "Ctrl" : m === "Super" ? "Win" : m,
+  );
+  return [...labels, k].join("+");
 }
 
 /** The accelerator a keydown describes, or null when it isn't a usable shortcut:
@@ -94,3 +98,4 @@ export function shortcutFromEvent(e: KeyboardEvent): string | null {
   if (mods.length === 0 && !/^F\d{1,2}$/.test(code)) return null;
   return [...mods, code].join("+");
 }
+const IS_MACOS = /Mac/i.test(navigator.platform);
