@@ -674,7 +674,7 @@ html.windows .chat {
   border-radius: 16px 16px 0 0;
   overflow: hidden;
 }
-html.windows body:not(.no-inspector) .chat {
+html.windows body.no-inspector .chat {
   border-top-right-radius: 0;
 }
 html.windows body:not(.no-sidebar) .main {
