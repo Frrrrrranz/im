@@ -92,6 +92,7 @@ html.windows body {
 }
 html.windows {
   --controls-left: 10px;
+  --chrome: light-dark(#e9e9eb, #2a2a2c);
 }
 
 button,
@@ -507,9 +508,7 @@ body.no-inspector .inspector-inner {
 }
 /* Outside Tauri there is no vibrancy layer; stand in for the sidebar material. */
 html.mock .sidebar,
-html.mock .inspector,
-html.windows .sidebar,
-html.windows .inspector {
+html.mock .inspector {
   background: light-dark(#e9e9eb, #2a2a2c);
 }
 
@@ -640,6 +639,18 @@ body.resizing .resizer.column-handle::after {
   display: none;
 }
 
+/* Keep the Windows chrome quiet and let the reading area sit on a rounded
+   surface, while the native title bar remains owned by the OS. */
+html.windows .sidebar,
+html.windows .inspector,
+html.windows .main {
+  background: var(--chrome);
+}
+html.windows .chat {
+  background: var(--canvas);
+  border-radius: 14px 14px 0 0;
+  overflow: hidden;
+}
 /* ---- transcript ------------------------------------------------------ */
 
 .transcript {
