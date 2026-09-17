@@ -245,7 +245,7 @@ export function createInspector(): HTMLElement {
       (_, mime, b64: string) =>
         `"data:${mime};base64,… ${formatBytes((b64.length * 3) / 4)}"`,
     );
-    jsonCode.textContent = shown || "No session yet.";
+    jsonCode.replaceChildren(highlightJson(shown || "No session yet."));
     copyBtn.hidden = !text;
   };
 
@@ -369,6 +369,38 @@ function formatBytes(n: number): string {
     : `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function highlightJson(text: string): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  const token =
+    /"(?:\\.|[^"\\])*"|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while (true) {
+    match = token.exec(text);
+    if (!match) break;
+    const start = match.index;
+    if (start > cursor)
+      fragment.append(document.createTextNode(text.slice(cursor, start)));
+    const value = match[0];
+    const kind = value.startsWith('"')
+      ? /^\s*:/.test(text.slice(start + value.length))
+        ? "key"
+        : "string"
+      : value === "true" || value === "false"
+        ? "boolean"
+        : value === "null"
+          ? "null"
+          : "number";
+    const span = document.createElement("span");
+    span.className = `json-${kind}`;
+    span.textContent = value;
+    fragment.append(span);
+    cursor = start + value.length;
+  }
+  if (cursor < text.length)
+    fragment.append(document.createTextNode(text.slice(cursor)));
+  return fragment;
+}
 function flash(btn: HTMLElement) {
   const prev = btn.textContent;
   btn.textContent = "Copied";

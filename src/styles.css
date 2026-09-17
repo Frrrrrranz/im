@@ -92,7 +92,8 @@ html.windows body {
 }
 html.windows {
   --controls-left: 10px;
-  --chrome: light-dark(#e9e9eb, #2a2a2c);
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --chrome: light-dark(#f3f3f3, #252526);
 }
 
 button,
@@ -506,6 +507,21 @@ body.no-inspector .inspector-inner {
   color: var(--label);
   tab-size: 2;
 }
+.inspector pre.json .json-key {
+  color: light-dark(#7a3e9d, #c586c0);
+}
+.inspector pre.json .json-string {
+  color: light-dark(#0b6e4f, #ce9178);
+}
+.inspector pre.json .json-number {
+  color: light-dark(#986801, #b5cea8);
+}
+.inspector pre.json .json-boolean {
+  color: light-dark(#0b63a5, #569cd6);
+}
+.inspector pre.json .json-null {
+  color: light-dark(#777777, #569cd6);
+}
 /* Outside Tauri there is no vibrancy layer; stand in for the sidebar material. */
 html.mock .sidebar,
 html.mock .inspector {
@@ -648,7 +664,7 @@ html.windows .main {
 }
 html.windows .chat {
   background: var(--canvas);
-  border-radius: 14px 14px 0 0;
+  border-radius: 16px 16px 0 0;
   overflow: hidden;
 }
 /* ---- transcript ------------------------------------------------------ */
