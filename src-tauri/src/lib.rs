@@ -280,6 +280,10 @@ pub fn run() {
             let settings = store.settings()?;
             app.manage(Arc::new(Engine::new(store)));
 
+            // Windows uses the in-window controls and context menus instead of
+            // a separate native menu bar, which keeps the client closer to
+            // current Windows app conventions.
+            #[cfg(not(target_os = "windows"))]
             menu::install(app.handle(), settings.appearance)?;
 
             if let Some(window) = app.get_webview_window("main") {

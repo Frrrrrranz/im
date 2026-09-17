@@ -131,7 +131,7 @@ async function main() {
       actions.closeSettings();
     }
   });
-  if (!isTauri) installBrowserShortcuts();
+  if (!isTauri || isWindows) installBrowserShortcuts();
   document.addEventListener("contextmenu", (e) => {
     // Chrome (chrome) has no useful context menu; the transcript has its own.
     if (!(e.target as HTMLElement).closest(".transcript, input, textarea"))
@@ -451,22 +451,37 @@ function forwardErrors() {
   };
 }
 
-/** In Tauri these come from the native menu; in a browser we map them by hand. */
+/** In Tauri these come from the native menu, except on Windows where the menu bar is hidden. */
 function installBrowserShortcuts() {
-  const map: Record<string, string> = {
-    "meta+n": "new_chat",
-    "meta+shift+a": "attach_image",
-    "meta+,": "settings",
-    "meta+k": "choose_model",
-    "meta+.": "stop",
-    "meta+r": "regenerate",
-    "meta+e": "edit_last",
-    "ctrl+meta+s": "toggle_sidebar",
-    "alt+meta+t": "toggle_inspector",
-    "meta+shift+[": "prev_chat",
-    "meta+shift+]": "next_chat",
-    "meta+shift+e": "export_chat",
-  };
+  const map: Record<string, string> = isWindows
+    ? {
+        "ctrl+n": "new_chat",
+        "ctrl+shift+a": "attach_image",
+        "ctrl+,": "settings",
+        "ctrl+k": "choose_model",
+        "ctrl+.": "stop",
+        "ctrl+r": "regenerate",
+        "ctrl+e": "edit_last",
+        "ctrl+shift+s": "toggle_sidebar",
+        "ctrl+alt+t": "toggle_inspector",
+        "ctrl+shift+{": "prev_chat",
+        "ctrl+shift+}": "next_chat",
+        "ctrl+shift+e": "export_chat",
+      }
+    : {
+        "meta+n": "new_chat",
+        "meta+shift+a": "attach_image",
+        "meta+,": "settings",
+        "meta+k": "choose_model",
+        "meta+.": "stop",
+        "meta+r": "regenerate",
+        "meta+e": "edit_last",
+        "ctrl+meta+s": "toggle_sidebar",
+        "alt+meta+t": "toggle_inspector",
+        "meta+shift+[": "prev_chat",
+        "meta+shift+]": "next_chat",
+        "meta+shift+e": "export_chat",
+      };
   window.addEventListener("keydown", (e) => {
     const combo = [
       e.ctrlKey && "ctrl",
