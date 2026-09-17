@@ -8,8 +8,8 @@
   --font:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --mono:
-    "JetBrains Mono", "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace,
-    monospace;
+    Consolas, "Cascadia Mono", "Cascadia Code", "Microsoft YaHei UI",
+    "Microsoft YaHei", ui-monospace, monospace;
 
   --label: light-dark(rgba(0, 0, 0, 0.85), rgba(255, 255, 255, 0.85));
   --secondary: light-dark(rgba(0, 0, 0, 0.5), rgba(255, 255, 255, 0.55));
