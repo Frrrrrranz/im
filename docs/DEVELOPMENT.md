@@ -5,12 +5,13 @@ speak the protocols, ship a release. The README stays minimal on purpose.
 
 ## Build
 
-Requirements: Rust (stable), Node 20+, Xcode command line tools.
+Requirements: Rust (stable), Node 22+, and Xcode command line tools on macOS.
+For Windows prerequisites and build commands, see [Windows](WINDOWS.md).
 
 ```sh
-npm install
+npm ci
 npm run tauri dev            # dev build with hot reload
-npm run tauri build          # release .app + updater archive in src-tauri/target/release/bundle
+npm run tauri build -- --debug --config .github/tauri-ci.json  # local .app without updater signing
 ```
 
 ## Using it
@@ -198,15 +199,25 @@ streaming request with a single JSON object instead, it is accepted too.
 
 ```sh
 npm run dev                    # frontend alone in a browser, in-memory mock backend
+npm run biome:check             # lint, formatting and import order
+npm run typecheck               # TypeScript
+npm test                       # release feed and checksum regression tests
 scripts/snapshot.sh            # render every UI state to build/snapshots/*.png (headless Chrome)
-cd src-tauri && cargo test     # unit tests + end-to-end streaming against a local SSE server
+cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo test --locked --manifest-path src-tauri/Cargo.toml # unit tests + local SSE integration tests
 scripts/mock_server.py         # local stand-in for all three protocols (port 8787)
 scripts/app-snapshot.sh        # launch the debug .app and have it capture its own window
 ```
 
 `CLAUDE.md` has the architecture map and the rules that keep the app small.
+`.github/workflows/ci.yml` runs these checks on PRs and pushes to `main`,
+including Rust lint, tests and debug packaging on macOS and Windows. Fork PRs
+need no signing secrets. The Windows job also checks that closing the main
+window exits the process and uploads a debug installer.
 
 ## Install & updates
+
+On macOS:
 
 ```sh
 curl -fsSL https://im.linghaoz.com/install.sh | sh
@@ -214,14 +225,19 @@ curl -fsSL https://im.linghaoz.com/install.sh | sh
 
 That downloads the latest release, verifies its checksum and puts `im.app` in
 `/Applications` — and because `curl` doesn't set the quarantine flag, it opens
-without the "unidentified developer" stop. That is the only install path on
-purpose: there is no dmg to drag and no Gatekeeper dialog to click through.
+without the "unidentified developer" stop. The macOS install path stays
+command-only; there is no dmg.
+
+On Windows 10/11 (x64), download and run
+[`im_x64-setup.exe`](https://github.com/yetlinghao/im/releases/latest/download/im_x64-setup.exe).
+It installs for the current user. See [Windows](WINDOWS.md) for details.
 
 Updates come from inside the app. It checks the release feed quietly after
 launch (and every few hours); when there is a new version a single line
 appears at the foot of the sidebar — **Update to 0.2.0** — and clicking it
 downloads, installs and relaunches. Nothing pops up. **im → Check for
-Updates…** and **Settings → Version** are there for checking by hand.
+Updates…** on macOS and **Settings → General → Version** on either platform
+are there for checking by hand.
 
 ## Releasing
 
@@ -229,13 +245,21 @@ Updates…** and **Settings → Version** are there for checking by hand.
 `.github/workflows/pages.yml` (GitHub Pages, custom domain); it also serves
 `install.sh`.
 
-A tag is a release. `.github/workflows/release.yml` builds a universal macOS
-app, signs the updater archive with the project's key, and publishes
-`im_universal.app.tar.gz` + `.sig`, a `sha256` for the installer and
-`latest.json` (what the app polls) as a GitHub Release.
+A tag is a release. `.github/workflows/release.yml` builds the universal macOS
+app and Windows x64 NSIS installer in parallel, using the project's updater
+key to sign both. Once both builds succeed, one publish job assembles:
+
+- `im_universal.app.tar.gz`, `.sig` and `.sha256` (used by `install.sh`).
+- `im_x64-setup.exe`, `.sig` and `.sha256` (the site's stable Windows download).
+- `latest.json` with `darwin-aarch64`, `darwin-x86_64` and `windows-x86_64`.
+
+The release stays a draft until all assets have been uploaded. Failed builds
+leave the previous release current. `scripts/prepare-release.mjs` rejects
+missing bundles/signatures and mismatched tag/app versions before publishing.
 
 ```sh
-# bump "version" in src-tauri/tauri.conf.json and package.json, commit, then
+# bump versions in src-tauri/tauri.conf.json, src-tauri/Cargo.toml and package.json
+# update both lockfiles, commit, then
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
@@ -244,7 +268,9 @@ contents of the updater private key — its public half is in
 `tauri.conf.json`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty if the key
 has none). Lose the private key and existing installs can never update again.
 
-The app itself is ad-hoc signed; there is no Apple Developer ID in the loop.
-If one ever exists, export `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
+The macOS app is ad-hoc signed; there is no Apple Developer ID in the loop.
+The Windows installer currently has no Authenticode certificate; updater
+signatures are separate from OS code signing. If an Apple identity becomes
+available, export `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
 `APPLE_PASSWORD`, `APPLE_TEAM_ID` in the workflow and Tauri notarizes as well —
 nothing else changes.

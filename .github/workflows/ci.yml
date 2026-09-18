@@ -1,16 +1,44 @@
-name: windows
+name: ci
 
 on:
   push:
-    branches: [main, feat/windows-support]
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    runs-on: windows-2022
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run biome:check
+      - run: npm run typecheck
+      - run: npm test
+
+  desktop:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            bundle: app
+          - name: Windows x64
+            os: windows-2022
+            bundle: nsis
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,15 +46,18 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
       - run: npm ci
-      - run: npm run biome:check
-      - run: npm run typecheck
+      - run: cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - run: npm run tauri build -- --debug --bundles nsis
-      - name: Main window close exits the app
+      # PRs, including forks, build installers without access to the signing key.
+      - run: npm run tauri build -- --debug --ci --bundles ${{ matrix.bundle }} --config .github/tauri-ci.json
+      - name: Main window close exits the Windows app
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           IM_SCENARIO: close
@@ -46,7 +77,8 @@ jobs:
             }
           }
       - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
         with:
-          name: im-windows-x64
+          name: im-windows-x64-debug
           path: src-tauri/target/debug/bundle/nsis/*.exe
           if-no-files-found: error

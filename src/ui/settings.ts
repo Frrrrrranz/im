@@ -10,7 +10,6 @@ import { isMacOS, isWindows } from "../platform";
 import { PROTOCOLS } from "../presets";
 import { prettyShortcut, shortcutFromEvent } from "../shortcut";
 import { type State, store } from "../state";
-
 import type { Appearance, Protocol, ProviderView } from "../types";
 
 export function createSettings(backend: Backend): HTMLElement {
@@ -115,16 +114,6 @@ export function createSettings(backend: Backend): HTMLElement {
   // "Version 0.1.0 · Check for Updates" → "0.2.0 available · Update" → "Downloading… 42%".
   const versionRow = () => {
     const s = store.state;
-    if (isWindows)
-      return srow(
-        "Version",
-        h(
-          "span",
-          { class: "srow-value" },
-          "Windows updates are not available yet",
-        ),
-        s.version ? `im ${s.version}` : undefined,
-      );
     const u = s.update;
     let control: HTMLElement;
     if (u && (u.phase === "downloading" || u.phase === "installing")) {

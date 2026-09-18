@@ -3,6 +3,7 @@ import { createBackend, isTauri, sampleImage } from "./api";
 import { h, requireElement } from "./dom";
 import { normalizeImage } from "./images";
 import { isWindows } from "./platform";
+import { menuActionFromEvent } from "./shortcut";
 import { store } from "./state";
 import { createComposer } from "./ui/composer";
 import { createInspector } from "./ui/inspector";
@@ -17,7 +18,7 @@ import { createTopbar } from "./ui/topbar";
 import { createTranscript } from "./ui/transcript";
 
 async function main() {
-  if (isTauri && isWindows) document.documentElement.classList.add("windows");
+  if (isWindows) document.documentElement.classList.add("windows");
   if (isTauri) forwardErrors();
   const backend = await createBackend();
   actions.setBackend(backend);
@@ -144,15 +145,9 @@ async function main() {
   setTimeout(() => document.body.classList.remove("no-transitions"), 100);
   const scenario = await backend.scenario().catch(() => null);
   if (scenario) applyScenario(scenario);
-  // A quiet look at the release feed once the UI is up; the gear gets a dot if there is something.
-  if (
-    (isTauri && !isWindows) ||
-    new URLSearchParams(location.search).has("update")
-  ) {
-    setTimeout(
-      () => void actions.checkForUpdates(),
-      isTauri && !isWindows ? 4000 : 300,
-    );
+  // A quiet look at the release feed once the UI is up; updates appear in the sidebar.
+  if (isTauri || new URLSearchParams(location.search).has("update")) {
+    setTimeout(() => void actions.checkForUpdates(), isTauri ? 4000 : 300);
     setInterval(() => void actions.checkForUpdates(), 6 * 60 * 60 * 1000);
   }
 }
@@ -453,46 +448,8 @@ function forwardErrors() {
 
 /** In Tauri these come from the native menu, except on Windows where the menu bar is hidden. */
 function installBrowserShortcuts() {
-  const map: Record<string, string> = isWindows
-    ? {
-        "ctrl+n": "new_chat",
-        "ctrl+shift+a": "attach_image",
-        "ctrl+,": "settings",
-        "ctrl+k": "choose_model",
-        "ctrl+.": "stop",
-        "ctrl+r": "regenerate",
-        "ctrl+e": "edit_last",
-        "ctrl+shift+s": "toggle_sidebar",
-        "ctrl+alt+t": "toggle_inspector",
-        "ctrl+shift+{": "prev_chat",
-        "ctrl+shift+}": "next_chat",
-        "ctrl+shift+e": "export_chat",
-      }
-    : {
-        "meta+n": "new_chat",
-        "meta+shift+a": "attach_image",
-        "meta+,": "settings",
-        "meta+k": "choose_model",
-        "meta+.": "stop",
-        "meta+r": "regenerate",
-        "meta+e": "edit_last",
-        "ctrl+meta+s": "toggle_sidebar",
-        "alt+meta+t": "toggle_inspector",
-        "meta+shift+[": "prev_chat",
-        "meta+shift+]": "next_chat",
-        "meta+shift+e": "export_chat",
-      };
   window.addEventListener("keydown", (e) => {
-    const combo = [
-      e.ctrlKey && "ctrl",
-      e.altKey && "alt",
-      e.metaKey && "meta",
-      e.shiftKey && "shift",
-      (e.altKey ? e.code.replace(/^Key/, "") : e.key).toLowerCase(),
-    ]
-      .filter(Boolean)
-      .join("+");
-    const id = map[combo];
+    const id = menuActionFromEvent(e);
     if (id) {
       e.preventDefault();
       actions.handleMenu(id);

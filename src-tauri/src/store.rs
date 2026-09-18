@@ -71,7 +71,7 @@ fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-fn write_atomic(path: &Path, bytes: &[u8], secret: bool) -> Result<()> {
+fn write_atomic(path: &Path, bytes: &[u8], _secret: bool) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -79,66 +79,16 @@ fn write_atomic(path: &Path, bytes: &[u8], secret: bool) -> Result<()> {
     {
         let mut f = fs::File::create(&tmp)?;
         #[cfg(unix)]
-        if secret {
+        if _secret {
             use std::os::unix::fs::PermissionsExt;
             f.set_permissions(fs::Permissions::from_mode(0o600))?;
         }
         f.write_all(bytes)?;
         f.sync_all()?;
     }
-    replace_file(&tmp, path)?;
+    // std::fs::rename replaces existing files on Windows too (MoveFileExW).
+    fs::rename(&tmp, path)?;
     Ok(())
-}
-
-/// Replace a file without failing when the destination already exists.
-///
-/// `rename` replaces an existing file on Unix, but Windows requires the
-/// destination to be removed first. Removing it would leave a crash window in
-/// every settings/session save, so use the native atomic replacement primitive
-/// on Windows and retain rename for the first write and Unix.
-fn replace_file(tmp: &Path, path: &Path) -> Result<()> {
-    #[cfg(windows)]
-    {
-        if path.exists() {
-            return replace_file_windows(tmp, path);
-        }
-    }
-    fs::rename(tmp, path).map_err(StoreError::from)
-}
-
-#[cfg(windows)]
-fn replace_file_windows(tmp: &Path, path: &Path) -> Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn ReplaceFileW(
-            replaced_file_name: *const u16,
-            replacement_file_name: *const u16,
-            backup_file_name: *const u16,
-            replace_flags: u32,
-            exclude: *mut std::ffi::c_void,
-            reserved: *mut std::ffi::c_void,
-        ) -> i32;
-    }
-
-    let replaced: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    let replacement: Vec<u16> = tmp.as_os_str().encode_wide().chain(Some(0)).collect();
-    let ok = unsafe {
-        ReplaceFileW(
-            replaced.as_ptr(),
-            replacement.as_ptr(),
-            std::ptr::null(),
-            0,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        )
-    };
-    if ok == 0 {
-        Err(std::io::Error::last_os_error().into())
-    } else {
-        Ok(())
-    }
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Option<T>> {

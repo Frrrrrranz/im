@@ -30,7 +30,7 @@ const isTauri = "__TAURI_INTERNALS__" in window;
 const MAX_FIELD = 176;
 
 async function main() {
-  if (isTauri && isWindows) document.documentElement.classList.add("windows");
+  if (isWindows) document.documentElement.classList.add("windows");
   const host = isTauri ? await tauriHost() : mockHost();
   const quoteText = h("div", { class: "quote-text" });
   const quoteRemove = h(

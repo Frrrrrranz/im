@@ -3,13 +3,14 @@
 
 import * as actions from "../actions";
 import { h, icon, replaceChildren } from "../dom";
+import { menuShortcuts, prettyShortcut } from "../shortcut";
 import { type State, store } from "../state";
 import type { ProviderView } from "../types";
 
 export function createTopbar(): HTMLElement {
   const modelBtn = h("button", {
     class: "model-btn",
-    title: "Choose Model",
+    title: `Choose Model (${prettyShortcut(menuShortcuts.choose_model)})`,
     onclick: () => actions.togglePicker(),
   });
   const picker = createPicker();

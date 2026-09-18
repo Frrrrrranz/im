@@ -5,6 +5,7 @@
 
 import * as actions from "../actions";
 import { h, icon, replaceChildren } from "../dom";
+import { menuShortcuts, prettyShortcut } from "../shortcut";
 import { type State, store } from "../state";
 
 export function createComposer(): HTMLElement {
@@ -154,7 +155,7 @@ export function createComposer(): HTMLElement {
     textarea.placeholder = model?.model
       ? `Message ${model.model}`
       : s.providers.length
-        ? "Choose a model"
+        ? `Choose a model (${prettyShortcut(menuShortcuts.choose_model)})`
         : "Message";
     updateButton(s);
     if (s.currentId !== lastSession) {

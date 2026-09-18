@@ -4,6 +4,7 @@
 
 import { contentWith, textOf } from "./content";
 import { type ImageSource, isImagePath } from "./images";
+import { isWindows } from "./platform";
 import type {
   ContextItem,
   Message,
@@ -337,7 +338,7 @@ function mockBackend(): Backend {
     inspector_visible: state === "json" || params.get("inspector") === "1",
     default_provider_id: "openrouter",
     default_model: "anthropic/claude-sonnet-4",
-    quick_shortcut: "Alt+Space",
+    quick_shortcut: isWindows ? "" : "Alt+Space",
   };
   let quickAccess = params.has("access");
   let providers: ProviderView[] =

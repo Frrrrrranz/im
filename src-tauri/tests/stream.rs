@@ -218,7 +218,7 @@ async fn chat_protocol_round_trip_persists_trajectory() {
     let (events, emit) = collect();
     engine.run_turn(send("hello"), emit).await.unwrap();
 
-    let events = events.lock().unwrap();
+    let events = events.lock().unwrap().clone();
     let TurnEvent::Started { session } = &events[0] else { panic!("expected Started, got {:?}", events[0]) };
     assert_eq!(session.messages.len(), 1);
     assert_eq!(session.title, "hello");
@@ -292,7 +292,7 @@ async fn http_error_leaves_user_message_and_no_reply() {
     let (_dir, engine) = engine_with(&base, Protocol::Chat, "bad");
     let (events, emit) = collect();
     engine.run_turn(send("hello"), emit).await.unwrap();
-    let events = events.lock().unwrap();
+    let events = events.lock().unwrap().clone();
     let TurnEvent::Started { session } = &events[0] else { panic!() };
     let TurnEvent::Done { message, error, .. } = events.last().unwrap() else { panic!() };
     assert!(message.is_none());

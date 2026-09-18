@@ -12,11 +12,13 @@
 
 <p align="center">macOS 13+ · Apple silicon and Intel · <a href="https://im.linghaoz.com">im.linghaoz.com</a></p>
 
+<p align="center">Windows 10/11 · x64 · <a href="https://github.com/yetlinghao/im/releases/latest/download/im_x64-setup.exe">Download installer</a></p>
+
 <br />
 
-- Any endpoint that speaks Chat Completions, Anthropic Messages or Responses. Your keys stay on your Mac.
+- Any endpoint that speaks Chat Completions, Anthropic Messages or Responses. Your keys stay on your computer.
 - Every conversation is one plain JSON file — readable, diffable, replayable.
-- Native to the bone: vibrancy, menus, shortcuts, system font. Nothing that isn't content.
+- Native windows, menus, shortcuts and system fonts. Nothing that isn't content.
 
 <br />
 
