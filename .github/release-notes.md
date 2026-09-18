@@ -1,3 +1,7 @@
+- Windows 10/11 x64 support, with native context menus, configurable quick input, and in-app updates.
+- Refined settings layout and platform-specific keyboard shortcut hints.
+- Syntax highlighting in the trajectory JSON view.
+
 **macOS 13+** (Apple silicon and Intel):
 
 ```sh
