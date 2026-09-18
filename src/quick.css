@@ -94,6 +94,10 @@ body {
   margin-bottom: 1px;
 }
 
+html.windows .card {
+  background: light-dark(#f6f6f8, #28282c);
+}
+
 /* Outside Tauri there is no vibrancy: stand in for the material and a desktop behind it. */
 html.mock body {
   min-height: 100vh;

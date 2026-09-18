@@ -3,20 +3,23 @@
 //! behaviour so keyboard shortcuts and menu items share one code path.
 
 use serde::Deserialize;
-use tauri::menu::{
-    AboutMetadata, CheckMenuItem, ContextMenu, Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem,
-    SubmenuBuilder,
-};
-use tauri::{AppHandle, Emitter, Manager, Runtime, Wry};
+use tauri::menu::{ContextMenu, Menu, MenuBuilder, MenuEvent, MenuItemBuilder};
+#[cfg(not(target_os = "windows"))]
+use tauri::menu::{AboutMetadata, CheckMenuItem, MenuItem, PredefinedMenuItem, SubmenuBuilder};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
+#[cfg(not(target_os = "windows"))]
+use tauri::Wry;
 
 use crate::model::Appearance;
 
-pub const APPEARANCE_ITEMS: [(&str, Appearance); 3] = [
+#[cfg(not(target_os = "windows"))]
+const APPEARANCE_ITEMS: [(&str, Appearance); 3] = [
     ("appearance:system", Appearance::System),
     ("appearance:light", Appearance::Light),
     ("appearance:dark", Appearance::Dark),
 ];
 
+#[cfg(not(target_os = "windows"))]
 struct AppearanceMenu(Vec<(Appearance, CheckMenuItem<Wry>)>);
 
 pub fn theme_for(a: Appearance) -> Option<tauri::Theme> {
@@ -28,6 +31,7 @@ pub fn theme_for(a: Appearance) -> Option<tauri::Theme> {
 }
 
 pub fn apply_appearance(app: &AppHandle, appearance: Appearance) {
+    #[cfg(not(target_os = "windows"))]
     if let Some(items) = app.try_state::<AppearanceMenu>() {
         for (a, item) in &items.0 {
             let _ = item.set_checked(*a == appearance);
@@ -40,7 +44,8 @@ pub fn apply_appearance(app: &AppHandle, appearance: Appearance) {
     }
 }
 
-pub fn install(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
+#[cfg(not(target_os = "windows"))]
+pub fn install_menubar(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
     let about = AboutMetadata {
         name: Some("im".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
@@ -48,6 +53,7 @@ pub fn install(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
         ..Default::default()
     };
 
+    #[cfg(target_os = "macos")]
     let app_menu = SubmenuBuilder::new(app, "im")
         .item(&PredefinedMenuItem::about(app, Some("About im"), Some(about))?)
         .item(&MenuItem::with_id(app, "check_updates", "Check for Updates…", true, None::<&str>)?)
@@ -61,6 +67,13 @@ pub fn install(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
         .show_all()
         .separator()
         .quit()
+        .build()?;
+
+    #[cfg(not(target_os = "macos"))]
+    let app_menu = SubmenuBuilder::new(app, "Help")
+        .item(&PredefinedMenuItem::about(app, Some("About im"), Some(about))?)
+        .item(&MenuItem::with_id(app, "check_updates", "Check for Updates…", true, None::<&str>)?)
+        .item(&MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+Comma"))?)
         .build()?;
 
     let file_menu = SubmenuBuilder::new(app, "File")
@@ -126,23 +139,19 @@ pub fn install(app: &AppHandle, appearance: Appearance) -> tauri::Result<()> {
         .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &chat_menu, &window_menu])
         .build()?;
     app.set_menu(menu)?;
-
-    app.on_menu_event(|app, event| {
-        let id = event.id().0.as_str();
-        match id {
-            "close" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
-                }
-            }
-            _ => {
-                if let Err(e) = app.emit("menu", id) {
-                    log::warn!("menu emit failed: {e}");
-                }
-            }
-        }
-    });
     Ok(())
+}
+
+pub fn handle_event(app: &AppHandle, event: MenuEvent) {
+    let id = event.id().0.as_str();
+    if id == "close" {
+        if let Some(w) = app.get_webview_window("main") {
+            // The macOS close handler hides the window; Windows exits the app.
+            let _ = w.close();
+        }
+    } else if let Err(e) = app.emit("menu", id) {
+        log::warn!("menu emit failed: {e}");
+    }
 }
 
 /// One entry of a context menu requested by the frontend.

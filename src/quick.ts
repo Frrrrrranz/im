@@ -5,6 +5,7 @@
 // the line, Esc (or clicking elsewhere) puts it away.
 
 import { h, icon } from "./dom";
+import { isWindows } from "./platform";
 
 interface ShowPayload {
   selection: string | null;
@@ -29,6 +30,7 @@ const isTauri = "__TAURI_INTERNALS__" in window;
 const MAX_FIELD = 176;
 
 async function main() {
+  if (isWindows) document.documentElement.classList.add("windows");
   const host = isTauri ? await tauriHost() : mockHost();
   const quoteText = h("div", { class: "quote-text" });
   const quoteRemove = h(

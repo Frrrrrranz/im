@@ -4,10 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>im — just chat.</title>
-    <meta name="description" content="An intuitive LLM chat client." />
+    <meta name="description" content="An intuitive LLM chat client for macOS and Windows." />
     <meta name="color-scheme" content="light dark" />
     <meta property="og:title" content="im — just chat." />
-    <meta property="og:description" content="An intuitive LLM chat client." />
+    <meta property="og:description" content="An intuitive LLM chat client for macOS and Windows." />
     <meta property="og:image" content="https://im.linghaoz.com/icon.png" />
     <link rel="icon" href="icon.png" />
     <link rel="apple-touch-icon" href="icon.png" />
@@ -91,7 +91,8 @@
         -webkit-user-select: all;
         transition: border-color 120ms ease;
       }
-      .install:hover {
+      .install:hover,
+      .download:hover {
         border-color: light-dark(rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.25));
       }
       .install code {
@@ -123,6 +124,21 @@
         margin: 18px 0 0;
         font-size: 13px;
         color: var(--tertiary);
+      }
+      .download {
+        display: inline-block;
+        margin-top: 28px;
+        padding: 11px 20px;
+        border: 1px solid var(--separator);
+        border-radius: 12px;
+        background: var(--code-bg);
+        color: var(--label);
+        font-size: 14px;
+        text-decoration: none;
+      }
+      .download:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
       }
       footer a {
         color: inherit;
@@ -315,6 +331,8 @@
         <button class="copy" id="copy" type="button">Copy</button>
       </div>
       <p class="alt">macOS 13+ · Apple silicon and Intel</p>
+      <a class="download" href="https://github.com/yetlinghao/im/releases/latest/download/im_x64-setup.exe">Download for Windows</a>
+      <p class="alt">Windows 10/11 · x64 · Download and run the installer</p>
 
       <section class="why" aria-label="Download size compared with how much of everyday chat use each app covers">
         <div class="panel size">

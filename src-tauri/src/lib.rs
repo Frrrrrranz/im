@@ -274,13 +274,19 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(quick::plugin())
+        // Context menus need the same event handler even without a menu bar.
+        .on_menu_event(menu::handle_event)
         .setup(|app| {
             let root = data_root(app.handle())?;
             let store = Store::new(root)?;
             let settings = store.settings()?;
             app.manage(Arc::new(Engine::new(store)));
 
-            menu::install(app.handle(), settings.appearance)?;
+            // Windows uses the in-window controls and context menus instead of
+            // a separate native menu bar, which keeps the client closer to
+            // current Windows app conventions.
+            #[cfg(not(target_os = "windows"))]
+            menu::install_menubar(app.handle(), settings.appearance)?;
 
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "macos")]
@@ -308,6 +314,19 @@ pub fn run() {
                         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                             api.prevent_close();
                             let _ = w.hide();
+                        }
+                    });
+                }
+
+                // The hidden quick window keeps Tauri alive after main is
+                // destroyed. On Windows, closing main must exit the app instead.
+                #[cfg(target_os = "windows")]
+                {
+                    let handle = app.handle().clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                            handle.exit(0);
                         }
                     });
                 }
@@ -364,11 +383,11 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building im")
-        .run(|app, event| match event {
+        .run(|_app, event| match event {
             // ⌘W hides the window; clicking the dock icon brings it back.
             #[cfg(target_os = "macos")]
             tauri::RunEvent::Reopen { .. } => {
-                if let Some(w) = app.get_webview_window("main") {
+                if let Some(w) = _app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
                 }

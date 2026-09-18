@@ -1,6 +1,8 @@
 // Accelerator strings — what the backend registers ("Alt+Space",
 // "Super+Shift+KeyK") — to and from what the user sees (⌥ Space, ⇧⌘K) and types.
 
+import { isMacOS } from "./platform";
+
 const MODIFIERS = ["Control", "Alt", "Shift", "Super"] as const;
 const MOD_GLYPH: Record<string, string> = {
   Control: "⌃",
@@ -32,6 +34,35 @@ const KEY_GLYPH: Record<string, string> = {
   Backquote: "`",
 };
 
+// One set of bindings supplies both webview shortcuts and their UI hints.
+// Match physical key codes so Shift+[ and Alt+T work across keyboard layouts.
+const primary = isMacOS ? "Super" : "Control";
+const shifted = isMacOS ? "Shift+Super" : "Control+Shift";
+export const menuShortcuts = {
+  new_chat: `${primary}+KeyN`,
+  attach_image: `${shifted}+KeyA`,
+  settings: `${primary}+Comma`,
+  choose_model: `${primary}+KeyK`,
+  stop: `${primary}+Period`,
+  regenerate: `${primary}+KeyR`,
+  edit_last: `${primary}+KeyE`,
+  toggle_sidebar: isMacOS ? "Control+Super+KeyS" : "Control+Shift+KeyS",
+  toggle_inspector: isMacOS ? "Alt+Super+KeyT" : "Control+Alt+KeyT",
+  prev_chat: `${shifted}+BracketLeft`,
+  next_chat: `${shifted}+BracketRight`,
+  export_chat: `${shifted}+KeyE`,
+};
+
+export function menuActionFromEvent(e: KeyboardEvent): string | null {
+  if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return null;
+  const accelerator = shortcutFromEvent(e);
+  return (
+    Object.entries(menuShortcuts).find(
+      ([, keys]) => keys === accelerator,
+    )?.[0] ?? null
+  );
+}
+
 function modifierOf(part: string): string | null {
   switch (part.toLowerCase()) {
     case "ctrl":
@@ -46,9 +77,10 @@ function modifierOf(part: string): string | null {
     case "cmd":
     case "command":
     case "meta":
+      return "Super";
     case "cmdorctrl":
     case "commandorcontrol":
-      return "Super";
+      return isMacOS ? "Super" : "Control";
     default:
       return null;
   }
@@ -61,7 +93,7 @@ function keyGlyph(code: string): string {
   return code;
 }
 
-/** "Alt+Space" → "⌥ Space"; "" → "Off". Modifiers in the macOS order ⌃⌥⇧⌘. */
+/** "Alt+Space" → "⌥ Space" on macOS, "Alt+Space" on Windows; "" → "Off". */
 export function prettyShortcut(accel: string): string {
   if (!accel) return "Off";
   const parts = accel.split("+");
@@ -71,7 +103,11 @@ export function prettyShortcut(accel: string): string {
     .map((m) => MOD_GLYPH[m])
     .join("");
   const k = keyGlyph(key);
-  return k.length > 1 ? `${glyphs} ${k}`.trim() : `${glyphs}${k}`;
+  if (isMacOS) return k.length > 1 ? `${glyphs} ${k}`.trim() : `${glyphs}${k}`;
+  const labels = MODIFIERS.filter((m) => mods.has(m)).map((m) =>
+    m === "Control" ? "Ctrl" : m === "Super" ? "Win" : m,
+  );
+  return [...labels, k].join("+");
 }
 
 /** The accelerator a keydown describes, or null when it isn't a usable shortcut:

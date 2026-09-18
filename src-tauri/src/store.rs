@@ -71,7 +71,7 @@ fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-fn write_atomic(path: &Path, bytes: &[u8], secret: bool) -> Result<()> {
+fn write_atomic(path: &Path, bytes: &[u8], _secret: bool) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -79,13 +79,14 @@ fn write_atomic(path: &Path, bytes: &[u8], secret: bool) -> Result<()> {
     {
         let mut f = fs::File::create(&tmp)?;
         #[cfg(unix)]
-        if secret {
+        if _secret {
             use std::os::unix::fs::PermissionsExt;
             f.set_permissions(fs::Permissions::from_mode(0o600))?;
         }
         f.write_all(bytes)?;
         f.sync_all()?;
     }
+    // std::fs::rename replaces existing files on Windows too (MoveFileExW).
     fs::rename(&tmp, path)?;
     Ok(())
 }
@@ -286,6 +287,55 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::new(dir.path().to_path_buf()).unwrap();
         (dir, store)
+    }
+
+    #[test]
+    fn repeated_writes_replace_existing_files() {
+        let (dir, store) = store();
+
+        let mut settings = store.settings().unwrap();
+        settings.appearance = Appearance::Dark;
+        store.save_settings(&settings).unwrap();
+        settings.appearance = Appearance::Light;
+        store.save_settings(&settings).unwrap();
+        assert_eq!(store.settings().unwrap().appearance, Appearance::Light);
+
+        let mut session = store.new_session("provider", "model", None);
+        session.messages.push(Message::user("first", now_rfc3339()));
+        store.save_session(&session).unwrap();
+        session.messages[0] = Message::user("second", now_rfc3339());
+        store.save_session(&session).unwrap();
+        assert_eq!(store.session(&session.id).unwrap().messages[0].content.text(), "second");
+
+        let mut provider = Provider {
+            id: "provider".into(),
+            name: "First".into(),
+            protocol: Protocol::Chat,
+            base_url: "https://example.com/v1".into(),
+            models: vec!["model".into()],
+        };
+        store.upsert_provider(provider.clone()).unwrap();
+        provider.name = "Second".into();
+        store.upsert_provider(provider).unwrap();
+        assert_eq!(store.provider("provider").unwrap().unwrap().name, "Second");
+
+        store.set_api_key("provider", Some("first-key")).unwrap();
+        store.set_api_key("provider", Some("second-key")).unwrap();
+        assert_eq!(store.api_key("provider").unwrap().as_deref(), Some("second-key"));
+
+        let export = dir.path().join("export.jsonl");
+        fs::write(&export, b"old export").unwrap();
+        assert_eq!(store.export_jsonl(&export).unwrap(), 1);
+        assert!(!fs::read_to_string(&export).unwrap().contains("old export"));
+    }
+
+    #[test]
+    fn unicode_data_directory_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path().join("中文 data")).unwrap();
+        store.set_api_key("provider", Some("first-key")).unwrap();
+        store.set_api_key("provider", Some("second-key")).unwrap();
+        assert_eq!(store.api_key("provider").unwrap().as_deref(), Some("second-key"));
     }
 
     #[test]

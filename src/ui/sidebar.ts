@@ -1,5 +1,6 @@
 import * as actions from "../actions";
 import { h, icon, relativeDay, replaceChildren } from "../dom";
+import { menuShortcuts, prettyShortcut } from "../shortcut";
 import { type State, store } from "../state";
 
 export function createSidebar(): HTMLElement {
@@ -8,7 +9,7 @@ export function createSidebar(): HTMLElement {
     "button",
     {
       class: "nav-row",
-      title: "New Chat (⌘N)",
+      title: `New Chat (${prettyShortcut(menuShortcuts.new_chat)})`,
       onclick: () => actions.newChat(),
     },
     icon("compose"),
@@ -21,7 +22,7 @@ export function createSidebar(): HTMLElement {
     "button",
     {
       class: "sidebar-foot",
-      title: "Settings (⌘,)",
+      title: `Settings (${prettyShortcut(menuShortcuts.settings)})`,
       "aria-label": "Settings",
       onclick: () =>
         store.state.view === "settings"
@@ -144,7 +145,7 @@ export function createWindowControls(): HTMLElement {
       "button",
       {
         class: "icon-btn",
-        title: "Toggle Sidebar (⌃⌘S)",
+        title: `Toggle Sidebar (${prettyShortcut(menuShortcuts.toggle_sidebar)})`,
         "aria-label": "Toggle Sidebar",
         onclick: () => actions.toggleSidebar(),
       },
@@ -162,7 +163,7 @@ export function createInspectorControls(): HTMLElement {
       "button",
       {
         class: "icon-btn",
-        title: "Toggle Trajectory (⌥⌘T)",
+        title: `Toggle Trajectory (${prettyShortcut(menuShortcuts.toggle_inspector)})`,
         "aria-label": "Toggle Trajectory",
         onclick: () => actions.toggleInspector(),
       },

@@ -24,8 +24,7 @@ impl SseParser {
     pub fn push(&mut self, chunk: &[u8]) -> Vec<SseEvent> {
         self.buf.extend_from_slice(chunk);
         let mut out = Vec::new();
-        loop {
-            let Some(nl) = self.buf.iter().position(|&b| b == b'\n') else { break };
+        while let Some(nl) = self.buf.iter().position(|&b| b == b'\n') {
             let line: Vec<u8> = self.buf.drain(..=nl).collect();
             let mut line = &line[..nl];
             if line.last() == Some(&b'\r') {

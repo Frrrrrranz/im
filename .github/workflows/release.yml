@@ -1,6 +1,5 @@
-# Tag `vX.Y.Z` → universal macOS build, ad-hoc code signature, updater
-# artifacts signed with the Tauri key, GitHub Release with dmg + app.tar.gz +
-# .sig + latest.json (the updater feed) + a sha256 for install.sh.
+# Tag vX.Y.Z builds both platforms. Publish only after all signed assets and
+# their shared updater feed are ready, so latest never points at half a release.
 name: release
 
 on:
@@ -8,44 +7,102 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  macos:
-    runs-on: macos-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            bundle: app
+            bundle-dir: macos
+            bundle-glob: im.app.tar.gz
+            asset: im_universal.app.tar.gz
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            rust-targets: x86_64-pc-windows-msvc
+            bundle: nsis
+            bundle-dir: nsis
+            bundle-glob: im_*_x64-setup.exe
+            asset: im_x64-setup.exe
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: ${{ matrix.rust-targets }}
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.target }}
       - run: npm ci
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build and sign updater artifacts
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: im ${{ github.ref_name }}
-          releaseBody: |
-            **Install:** `curl -fsSL https://im.linghaoz.com/install.sh | sh` — installed copies update themselves.
-          releaseDraft: false
-          prerelease: false
-          includeUpdaterJson: true
-          args: --target universal-apple-darwin
-      - name: Upload checksum for install.sh
+        run: npm run tauri build -- --ci --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
+      - name: Stage signed bundle
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_DIR: src-tauri/target/${{ matrix.target }}/release/bundle/${{ matrix.bundle-dir }}
+          BUNDLE_GLOB: ${{ matrix.bundle-glob }}
+          ASSET_NAME: ${{ matrix.asset }}
         run: |
-          # tauri-action uploads the archive as im_universal.app.tar.gz; name the checksum to match.
-          cd src-tauri/target/universal-apple-darwin/release/bundle/macos
-          cp im.app.tar.gz im_universal.app.tar.gz
-          shasum -a 256 im_universal.app.tar.gz > im_universal.app.tar.gz.sha256
-          gh release upload "${{ github.ref_name }}" im_universal.app.tar.gz.sha256 --clobber
+          files=("$BUNDLE_DIR"/$BUNDLE_GLOB)
+          test "${#files[@]}" -eq 1
+          test -s "${files[0]}"
+          test -s "${files[0]}.sig"
+          mkdir -p build/release
+          cp "${files[0]}" "build/release/$ASSET_NAME"
+          cp "${files[0]}.sig" "build/release/$ASSET_NAME.sig"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.target }}
+          path: build/release/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: build/release
+      - name: Assemble checksums and updater feed
+        run: node scripts/prepare-release.mjs build/release
+      - name: Publish complete release
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > build/is-draft; then
+            if [ "$(cat build/is-draft)" != true ]; then
+              echo "Release $RELEASE_TAG is already published; refusing to replace it." >&2
+              exit 1
+            fi
+            gh release upload "$RELEASE_TAG" build/release/* --clobber
+          else
+            gh release create "$RELEASE_TAG" build/release/* --verify-tag --draft \
+              --title "im $RELEASE_TAG" --notes-file .github/release-notes.md
+          fi
+          gh release edit "$RELEASE_TAG" --draft=false

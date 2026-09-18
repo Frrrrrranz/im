@@ -6,6 +6,7 @@
 import * as actions from "../actions";
 import type { Backend } from "../api";
 import { h, type IconName, icon, replaceChildren } from "../dom";
+import { isMacOS, isWindows } from "../platform";
 import { PROTOCOLS } from "../presets";
 import { prettyShortcut, shortcutFromEvent } from "../shortcut";
 import { type State, store } from "../state";
@@ -216,7 +217,7 @@ export function createSettings(backend: Backend): HTMLElement {
       srow("System prompt", null, undefined, prompt),
       srow("Appearance", seg),
       shortcutRow(),
-      accessRow(backend),
+      ...(isMacOS ? [accessRow(backend)] : []),
     );
   };
 
@@ -225,7 +226,9 @@ export function createSettings(backend: Backend): HTMLElement {
       data,
       srow(
         "Folder",
-        tbtn("Show in Finder", () => actions.revealData()),
+        tbtn(isWindows ? "Show in File Explorer" : "Show in Finder", () =>
+          actions.revealData(),
+        ),
       ),
       srow(
         "Export",

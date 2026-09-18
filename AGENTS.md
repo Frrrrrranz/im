@@ -1,6 +1,6 @@
 # im — working notes for agents
 
-Tauri 2 app (Rust backend, vanilla TypeScript + Vite frontend), macOS first.
+Tauri 2 app (Rust backend, vanilla TypeScript + Vite frontend), macOS and Windows x64.
 README.md is the front door and stays a few lines — the user wants it to read
 like the landing page. docs/DEVELOPMENT.md has the build/usage docs, the
 on-disk schema, the protocol table and the release procedure.
@@ -8,16 +8,18 @@ on-disk schema, the protocol table and the release procedure.
 ## Build & verify
 
 ```sh
-npm install
-npx tsc --noEmit                              # frontend typecheck
-(cd src-tauri && cargo test)                  # 41 tests: parsers, store, engine e2e over a local SSE server
-npx tauri build --debug --bundles app         # debug .app → src-tauri/target/debug/bundle/macos/im.app
+npm ci
+npm run biome:check                          # lint, formatting and import order
+npm run typecheck                            # frontend typecheck
+npm test                                     # release feed/checksum tests
+(cd src-tauri && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
+npx tauri build --debug --bundles app --config .github/tauri-ci.json # local macOS .app without updater signing
 npm run dev &  scripts/snapshot.sh            # frontend states via headless Chrome → build/snapshots/*.png
 scripts/app-snapshot.sh out.png [light|dark]  # the REAL app renders its own window to PNG
 swiftc -O -o build/icon scripts/icon.swift && build/icon logo.PNG src-tauri/icons/source.png \
   && npx tauri icon src-tauri/icons/source.png -o /tmp/icons  # app icon from the logo; copy the mac/win files back
 npm run tauri build                           # release .app + updater archive (ad-hoc signed; no dmg by design)
-git tag vX.Y.Z && git push origin vX.Y.Z      # GitHub Actions builds, signs the updater archive and publishes the Release
+git tag vX.Y.Z && git push origin vX.Y.Z      # GitHub Actions builds/signs macOS + Windows, then publishes one Release
 ```
 
 Releases live at github.com/yetlinghao/im; the landing page is `site/` →
@@ -39,9 +41,15 @@ repo. Frontend: `actions.checkForUpdates/installUpdate`, `state.update`; the onl
 unprompted surface is one line at the foot of the sidebar (`.update-row`,
 "Update to 0.2.0" → "Downloading… 42%" → relaunch) that exists only while an
 update is waiting; Settings → General → Version and `im → Check for Updates…`
-are the manual paths. No dialogs, no badges. There is no dmg any more
-(`bundle.targets = ["app"]`): install.sh is the only install path, by the
-user's decision. Mock: `?update=1` fakes a 0.2.0 in the feed.
+are the manual paths. No dialogs, no badges. There is no macOS dmg
+(`bundle.targets = ["app"]`): install.sh remains the macOS install path.
+Windows uses the current-user NSIS installer `im_x64-setup.exe`, linked from
+the site. Both platforms use the same updater key and `latest.json`; the
+release workflow collects both signed bundles before publishing. Only PR/local
+builds pass `.github/tauri-ci.json` to skip updater signing. Keep the global Tauri
+`macos-private-api` feature in sync with `app.macOSPrivateApi` on both platforms:
+Tauri's manifest checker does not combine global and target-specific features.
+Mock: `?update=1` fakes a 0.2.0 in the feed.
 
 This terminal cannot take screenshots or send keystrokes. Two ways to see the
 UI, use both after any view change:
@@ -212,9 +220,11 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
 - `[hidden] { display: none !important }` exists because class rules with
   `display: inline-flex` beat the UA `hidden` style — use `el.hidden`, not
   ad-hoc classes, to hide things.
-- Shortcuts come from the native menu (`menu.rs`) as `menu` events; the browser
-  keydown map in `main.ts` is for mock mode only. Cmd-key equivalents may also
-  reach the webview, so never double-bind them in Tauri mode.
+- On macOS, shortcuts come from the native menu (`menu.rs`) as `menu` events;
+  do not double-bind Cmd equivalents in the webview. Windows has no menu bar:
+  it and browser mocks use `menuShortcuts` in `shortcut.ts`, matched by key code
+  and also used for tooltip labels. Menu event forwarding must stay installed
+  on both platforms, because Windows still uses native context menus.
 - The composer's Return checks `isComposing` / keyCode 229 so CJK input works.
 - Scrolling never fights the user: only the user scrolls *up* (our scrolls
   only go down), so a decreasing `scrollTop` or a wheel-up stops following and
@@ -227,7 +237,7 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
 - Don't schedule anything the app needs in `requestAnimationFrame` before the
   window is visible: WebKit doesn't run frames for hidden windows (this is why
   `showWindow()` is awaited directly after `init()`).
-- Window lifecycle: the app is single-window and stays alive without one
+- Window lifecycle on macOS: the app is single-window and stays alive without one
   (`ExitRequested` is prevented), so the window must never be *destroyed* —
   ⌘W, the red button and Window → Close all go through `hide()`
   (`CloseRequested` → `prevent_close`), and `RunEvent::Reopen` (dock click)
@@ -235,7 +245,8 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
   show (the "window vanished" bug). Two fail-safes keep a hidden window from
   sticking: a 5s watchdog in `setup` shows it if the frontend never did, and
   `main().catch` shows it with the error. `IM_SCENARIO=close` exercises the
-  close path.
+  close path. Windows closes the entire app, including its hidden quick window;
+  CI checks that the process exits after the main window closes.
 - `transparent: true` + `macOSPrivateApi: true` are required for the vibrancy
   to show; `titleBarStyle: Overlay` + `hiddenTitle` give a chromeless window
   whose traffic lights sit near `trafficLightPosition` — tao only resizes the
@@ -263,7 +274,8 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
   screenshots in real time.) `attachPreview` skips HTML with an unclosed
   `<style>`/`<script>` (the parser would blank the page until it closes).
 - Quick input (`quick.rs` + `quick.ts`): `settings.quick_shortcut` (default
-  `Alt+Space`, "" = off; Settings → General has a recorder, ⌫ = off) summons a
+  `Alt+Space` on macOS, off on Windows where that key opens the system menu;
+  "" = off; Settings → General has a recorder, ⌫ = off) summons a
   520px glass panel next to the mouse; the text selected in the front app comes
   along as a quote and the message goes out as a markdown `> …` block plus the
   typed text (no schema change; `plainText` renders a leading `>` block as a
@@ -285,7 +297,8 @@ end (cancelled turns keep partial text with `finish_reason: "cancelled"`).
   ⌘C fallback on purpose (VS Code copies the whole line when nothing is
   selected). (4) A rejected shortcut (taken by another app) is not saved:
   `save_settings` keeps the old one and returns the error; the row shows it.
-  Test: `IM_QUICK=1 IM_QUICK_SELECTION=… IM_SNAPSHOT_WINDOW=quick
+  Windows supports typed quick input without selection quoting or the macOS
+  Accessibility prompt. Test: `IM_QUICK=1 IM_QUICK_SELECTION=… IM_SNAPSHOT_WINDOW=quick
   scripts/app-snapshot.sh` (panel), `+IM_QUICK_SEND=… PROVIDER=mock
   IM_SNAPSHOT_DELAY_MS=6000` (the chat it starts), `IM_QUICK_ESC=1` (hand-back;
   `RUST_LOG=im_lib=debug` logs the front pid before/after).

@@ -5,3 +5,6 @@ src-tauri/target/
 src-tauri/gen/schemas/
 .DS_Store
 *.log
+
+.agents/
+ci-artifacts/

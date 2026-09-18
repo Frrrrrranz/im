@@ -33,8 +33,11 @@ pub const WINDOW: &str = "quick";
 const MAIN: &str = "main";
 /// Logical width of the panel; the height follows its content.
 const WIDTH: f64 = 520.0;
+#[cfg(target_os = "macos")]
 const RADIUS: f64 = 14.0;
+#[cfg(target_os = "macos")]
 const FADE_IN: f64 = 0.16;
+#[cfg(target_os = "macos")]
 const FADE_OUT: f64 = 0.12;
 /// A quote longer than this is cut — it is a message, not a file transfer.
 const MAX_SELECTION: usize = 20_000;
@@ -46,6 +49,7 @@ const MAX_SELECTION: usize = 20_000;
 #[derive(Default, Clone, Copy)]
 struct Summon {
     mouse: Option<(f64, f64)>,
+    #[cfg(target_os = "macos")]
     previous_app: Option<i32>,
 }
 #[derive(Default)]
@@ -122,7 +126,11 @@ fn toggle(app: &AppHandle) {
     // Read the selection first: once the panel is key, the focused element is ours.
     let selection = selected_text().map(|s| s.chars().take(MAX_SELECTION).collect::<String>());
     if let Some(anchor) = app.try_state::<Anchor>() {
-        *anchor.0.lock().unwrap() = Summon { mouse: mouse_location(), previous_app: frontmost_app() };
+        *anchor.0.lock().unwrap() = Summon {
+            mouse: mouse_location(),
+            #[cfg(target_os = "macos")]
+            previous_app: mac::frontmost_app().filter(|&pid| pid != std::process::id() as i32),
+        };
     }
     let model = app.try_state::<Arc<Engine>>().and_then(|e| e.store().settings().ok()).and_then(|s| s.default_model);
     let payload = ShowPayload { selection, model, access: access_granted() };
@@ -179,18 +187,6 @@ fn dismiss(app: &AppHandle, restore: bool) {
     }
 }
 
-/// The app in front right now, unless it is us.
-fn frontmost_app() -> Option<i32> {
-    #[cfg(target_os = "macos")]
-    {
-        mac::frontmost_app().filter(|&pid| pid != std::process::id() as i32)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        None
-    }
-}
-
 fn selected_text() -> Option<String> {
     #[cfg(debug_assertions)]
     if let Ok(s) = std::env::var("IM_QUICK_SELECTION") {
@@ -224,7 +220,7 @@ fn access_granted() -> bool {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        true
+        false
     }
 }
 
@@ -312,7 +308,7 @@ pub fn quick_request_access() -> bool {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        true
+        false
     }
 }
 

@@ -9,10 +9,11 @@ pub const SESSION_SCHEMA_VERSION: u32 = 1;
 pub const PROVIDERS_SCHEMA_VERSION: u32 = 1;
 pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     /// OpenAI Chat Completions (`POST {base_url}/chat/completions`).
+    #[default]
     Chat,
     /// Anthropic Messages (`POST {base_url}/messages`).
     Anthropic,
@@ -71,12 +72,6 @@ pub struct TurnMeta {
     pub finish_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-}
-
-impl Default for Protocol {
-    fn default() -> Self {
-        Protocol::Chat
-    }
 }
 
 /// One piece of a multimodal message, in the Chat Completions wire shape so a
@@ -294,7 +289,13 @@ fn default_true() -> bool {
     true
 }
 pub fn default_quick_shortcut() -> String {
-    "Alt+Space".into()
+    if cfg!(target_os = "windows") {
+        // Alt+Space opens the native window menu on Windows. Keep Quick Input
+        // opt-in there instead of stealing a system-reserved combination.
+        String::new()
+    } else {
+        "Alt+Space".into()
+    }
 }
 
 impl Default for Settings {

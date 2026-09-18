@@ -2,6 +2,8 @@ import * as actions from "./actions";
 import { createBackend, isTauri, sampleImage } from "./api";
 import { h, requireElement } from "./dom";
 import { normalizeImage } from "./images";
+import { isWindows } from "./platform";
+import { menuActionFromEvent } from "./shortcut";
 import { store } from "./state";
 import { createComposer } from "./ui/composer";
 import { createInspector } from "./ui/inspector";
@@ -16,6 +18,7 @@ import { createTopbar } from "./ui/topbar";
 import { createTranscript } from "./ui/transcript";
 
 async function main() {
+  if (isWindows) document.documentElement.classList.add("windows");
   if (isTauri) forwardErrors();
   const backend = await createBackend();
   actions.setBackend(backend);
@@ -129,7 +132,7 @@ async function main() {
       actions.closeSettings();
     }
   });
-  if (!isTauri) installBrowserShortcuts();
+  if (!isTauri || isWindows) installBrowserShortcuts();
   document.addEventListener("contextmenu", (e) => {
     // Chrome (chrome) has no useful context menu; the transcript has its own.
     if (!(e.target as HTMLElement).closest(".transcript, input, textarea"))
@@ -142,7 +145,7 @@ async function main() {
   setTimeout(() => document.body.classList.remove("no-transitions"), 100);
   const scenario = await backend.scenario().catch(() => null);
   if (scenario) applyScenario(scenario);
-  // A quiet look at the release feed once the UI is up; the gear gets a dot if there is something.
+  // A quiet look at the release feed once the UI is up; updates appear in the sidebar.
   if (isTauri || new URLSearchParams(location.search).has("update")) {
     setTimeout(() => void actions.checkForUpdates(), isTauri ? 4000 : 300);
     setInterval(() => void actions.checkForUpdates(), 6 * 60 * 60 * 1000);
@@ -276,7 +279,7 @@ function applyScenario({
       });
       break;
     case "close":
-      // Debug: ask the window to close the way the red button does; it must hide, not die.
+      // Debug: exercise the native close path (hide on macOS, exit on Windows).
       setTimeout(
         () =>
           void import("@tauri-apps/api/window").then((m) =>
@@ -443,33 +446,10 @@ function forwardErrors() {
   };
 }
 
-/** In Tauri these come from the native menu; in a browser we map them by hand. */
+/** In Tauri these come from the native menu, except on Windows where the menu bar is hidden. */
 function installBrowserShortcuts() {
-  const map: Record<string, string> = {
-    "meta+n": "new_chat",
-    "meta+shift+a": "attach_image",
-    "meta+,": "settings",
-    "meta+k": "choose_model",
-    "meta+.": "stop",
-    "meta+r": "regenerate",
-    "meta+e": "edit_last",
-    "ctrl+meta+s": "toggle_sidebar",
-    "alt+meta+t": "toggle_inspector",
-    "meta+shift+[": "prev_chat",
-    "meta+shift+]": "next_chat",
-    "meta+shift+e": "export_chat",
-  };
   window.addEventListener("keydown", (e) => {
-    const combo = [
-      e.ctrlKey && "ctrl",
-      e.altKey && "alt",
-      e.metaKey && "meta",
-      e.shiftKey && "shift",
-      (e.altKey ? e.code.replace(/^Key/, "") : e.key).toLowerCase(),
-    ]
-      .filter(Boolean)
-      .join("+");
-    const id = map[combo];
+    const id = menuActionFromEvent(e);
     if (id) {
       e.preventDefault();
       actions.handleMenu(id);
