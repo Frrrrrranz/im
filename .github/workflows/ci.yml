@@ -61,6 +61,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          set +e
           cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings 2>&1 | tee clippy.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
