@@ -67,7 +67,7 @@ jobs:
               git diff -- src-tauri
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
-            patch=$(git diff -- src-tauri | base64 | tr -d '\n')
+            patch=$(git diff -- src-tauri | gzip -c | base64 | tr -d '\n')
             chunk_size=3000
             chunk_index=0
             while [ $((chunk_index * chunk_size)) -lt ${#patch} ]; do
