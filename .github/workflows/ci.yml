@@ -67,6 +67,8 @@ jobs:
               git diff -- src-tauri
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            patch=$(git diff -- src-tauri | base64 | tr -d '\n')
+            echo "::error title=rustfmt patch base64::$patch"
             exit 1
           fi
       - run: cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
