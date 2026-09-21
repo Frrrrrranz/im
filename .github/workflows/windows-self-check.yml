@@ -1,15 +1,15 @@
-name: ci
+name: windows-self-check
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: ["codex/**"]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: windows-self-check-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,22 +26,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  desktop:
-    name: ${{ matrix.name }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: macOS
-            os: macos-latest
-            bundle: app
-          - name: Windows x64
-            os: windows-2022
-            bundle: nsis
-    runs-on: ${{ matrix.os }}
-    env:
-      # Match tauri.conf.json so Cargo checks and Tauri reuse macOS dependencies.
-      MACOSX_DEPLOYMENT_TARGET: "13.0"
+  windows:
+    name: Windows x64
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -58,10 +45,8 @@ jobs:
       - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      # PRs, including forks, build installers without access to the signing key.
-      - run: npm run tauri build -- --debug --ci --bundles ${{ matrix.bundle }} --config .github/tauri-ci.json
+      - run: npm run tauri build -- --debug --ci --bundles nsis --config .github/tauri-ci.json
       - name: Main window close exits the Windows app
-        if: runner.os == 'Windows'
         shell: pwsh
         env:
           IM_SCENARIO: close
@@ -81,7 +66,6 @@ jobs:
             }
           }
       - uses: actions/upload-artifact@v7
-        if: runner.os == 'Windows'
         with:
           name: im-windows-x64-debug
           path: src-tauri/target/debug/bundle/nsis/*.exe
