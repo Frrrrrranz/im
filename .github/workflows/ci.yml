@@ -57,7 +57,25 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
-      - run: cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
+      - name: Run Clippy
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings 2>&1 | tee clippy.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            payload=$(gzip -c clippy.log | base64 | tr -d '
+')
+            chunk_size=3000
+            chunk_index=0
+            while [ $((chunk_index * chunk_size)) -lt ${#payload} ]; do
+              chunk_start=$((chunk_index * chunk_size))
+              chunk_title=$(printf 'clippy log chunk %04d' "$chunk_index")
+              echo "::error title=$chunk_title::${payload:$chunk_start:$chunk_size}"
+              chunk_index=$((chunk_index + 1))
+            done
+            exit "$status"
+          fi
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       # PRs, including forks, build installers without access to the signing key.
       - run: npm run tauri build -- --debug --ci --bundles ${{ matrix.bundle }} --config .github/tauri-ci.json
