@@ -110,7 +110,7 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
             _ => r#"{"error":{"message":"provider overloaded"}}"#,
         };
         let event = if path.ends_with("/messages") {
-            format!("event: error\ndata: {{\"type\":\"error\",\"error\":{{\"type\":\"rate_limit_error\",\"message\":\"Too many requests\"}}}}\n\n")
+            "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Too many requests\"}}\n\n".to_string()
         } else if path.ends_with("/responses") {
             format!("event: error\ndata: {data}\n\n")
         } else {
