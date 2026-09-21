@@ -56,7 +56,19 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
-      - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
+      - name: Check Rust formatting
+        shell: bash
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml
+          if ! git diff --quiet -- src-tauri; then
+            {
+              echo '## rustfmt patch'
+              echo '```diff'
+              git diff -- src-tauri
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
       - run: cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       # PRs, including forks, build installers without access to the signing key.
