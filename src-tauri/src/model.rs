@@ -45,7 +45,10 @@ pub struct Usage {
 
 impl Usage {
     pub fn is_empty(&self) -> bool {
-        self.input_tokens.is_none() && self.cached_input_tokens.is_none() && self.output_tokens.is_none() && self.reasoning_tokens.is_none()
+        self.input_tokens.is_none()
+            && self.cached_input_tokens.is_none()
+            && self.output_tokens.is_none()
+            && self.reasoning_tokens.is_none()
     }
 }
 
@@ -110,7 +113,9 @@ impl Content {
         if !text.is_empty() {
             parts.push(Part::Text { text });
         }
-        parts.extend(images.into_iter().map(|url| Part::ImageUrl { image_url: ImageUrl { url, detail: None } }));
+        parts.extend(images.into_iter().map(|url| Part::ImageUrl {
+            image_url: ImageUrl { url, detail: None },
+        }));
         Content::Parts(parts)
     }
 

@@ -3,12 +3,12 @@
 //! behaviour so keyboard shortcuts and menu items share one code path.
 
 use serde::Deserialize;
-use tauri::menu::{ContextMenu, Menu, MenuBuilder, MenuEvent, MenuItemBuilder};
 #[cfg(not(target_os = "windows"))]
 use tauri::menu::{AboutMetadata, CheckMenuItem, MenuItem, PredefinedMenuItem, SubmenuBuilder};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::menu::{ContextMenu, Menu, MenuBuilder, MenuEvent, MenuItemBuilder};
 #[cfg(not(target_os = "windows"))]
 use tauri::Wry;
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::model::Appearance;
 
@@ -55,10 +55,26 @@ pub fn install_menubar(app: &AppHandle, appearance: Appearance) -> tauri::Result
 
     #[cfg(target_os = "macos")]
     let app_menu = SubmenuBuilder::new(app, "im")
-        .item(&PredefinedMenuItem::about(app, Some("About im"), Some(about))?)
-        .item(&MenuItem::with_id(app, "check_updates", "Check for Updates…", true, None::<&str>)?)
+        .item(&PredefinedMenuItem::about(
+            app,
+            Some("About im"),
+            Some(about),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "check_updates",
+            "Check for Updates…",
+            true,
+            None::<&str>,
+        )?)
         .separator()
-        .item(&MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+Comma"))?)
+        .item(&MenuItem::with_id(
+            app,
+            "settings",
+            "Settings…",
+            true,
+            Some("CmdOrCtrl+Comma"),
+        )?)
         .separator()
         .services()
         .separator()
@@ -71,22 +87,80 @@ pub fn install_menubar(app: &AppHandle, appearance: Appearance) -> tauri::Result
 
     #[cfg(not(target_os = "macos"))]
     let app_menu = SubmenuBuilder::new(app, "Help")
-        .item(&PredefinedMenuItem::about(app, Some("About im"), Some(about))?)
-        .item(&MenuItem::with_id(app, "check_updates", "Check for Updates…", true, None::<&str>)?)
-        .item(&MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+Comma"))?)
+        .item(&PredefinedMenuItem::about(
+            app,
+            Some("About im"),
+            Some(about),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "check_updates",
+            "Check for Updates…",
+            true,
+            None::<&str>,
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "settings",
+            "Settings…",
+            true,
+            Some("CmdOrCtrl+Comma"),
+        )?)
         .build()?;
 
     let file_menu = SubmenuBuilder::new(app, "File")
-        .item(&MenuItem::with_id(app, "new_chat", "New Chat", true, Some("CmdOrCtrl+N"))?)
-        .item(&MenuItem::with_id(app, "attach_image", "Attach Image…", true, Some("Shift+CmdOrCtrl+A"))?)
+        .item(&MenuItem::with_id(
+            app,
+            "new_chat",
+            "New Chat",
+            true,
+            Some("CmdOrCtrl+N"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "attach_image",
+            "Attach Image…",
+            true,
+            Some("Shift+CmdOrCtrl+A"),
+        )?)
         .separator()
-        .item(&MenuItem::with_id(app, "export_chat", "Export Chat…", true, Some("Shift+CmdOrCtrl+E"))?)
-        .item(&MenuItem::with_id(app, "export_all", "Export All Chats as JSONL…", true, None::<&str>)?)
-        .item(&MenuItem::with_id(app, "show_data", "Show Data Folder", true, None::<&str>)?)
+        .item(&MenuItem::with_id(
+            app,
+            "export_chat",
+            "Export Chat…",
+            true,
+            Some("Shift+CmdOrCtrl+E"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "export_all",
+            "Export All Chats as JSONL…",
+            true,
+            None::<&str>,
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "show_data",
+            "Show Data Folder",
+            true,
+            None::<&str>,
+        )?)
         .separator()
-        .item(&MenuItem::with_id(app, "delete_chat", "Delete Chat", true, None::<&str>)?)
+        .item(&MenuItem::with_id(
+            app,
+            "delete_chat",
+            "Delete Chat",
+            true,
+            None::<&str>,
+        )?)
         .separator()
-        .item(&MenuItem::with_id(app, "close", "Close", true, Some("CmdOrCtrl+W"))?)
+        .item(&MenuItem::with_id(
+            app,
+            "close",
+            "Close",
+            true,
+            Some("CmdOrCtrl+W"),
+        )?)
         .build()?;
 
     let edit_menu = SubmenuBuilder::new(app, "Edit")
@@ -115,9 +189,27 @@ pub fn install_menubar(app: &AppHandle, appearance: Appearance) -> tauri::Result
     app.manage(AppearanceMenu(checks));
 
     let view_menu = SubmenuBuilder::new(app, "View")
-        .item(&MenuItem::with_id(app, "toggle_sidebar", "Toggle Sidebar", true, Some("Ctrl+CmdOrCtrl+S"))?)
-        .item(&MenuItem::with_id(app, "toggle_inspector", "Toggle Trajectory", true, Some("Alt+CmdOrCtrl+T"))?)
-        .item(&MenuItem::with_id(app, "choose_model", "Choose Model…", true, Some("CmdOrCtrl+K"))?)
+        .item(&MenuItem::with_id(
+            app,
+            "toggle_sidebar",
+            "Toggle Sidebar",
+            true,
+            Some("Ctrl+CmdOrCtrl+S"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "toggle_inspector",
+            "Toggle Trajectory",
+            true,
+            Some("Alt+CmdOrCtrl+T"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "choose_model",
+            "Choose Model…",
+            true,
+            Some("CmdOrCtrl+K"),
+        )?)
         .separator()
         .item(&appearance_menu)
         .separator()
@@ -125,18 +217,60 @@ pub fn install_menubar(app: &AppHandle, appearance: Appearance) -> tauri::Result
         .build()?;
 
     let chat_menu = SubmenuBuilder::new(app, "Chat")
-        .item(&MenuItem::with_id(app, "stop", "Stop Generating", true, Some("CmdOrCtrl+Period"))?)
-        .item(&MenuItem::with_id(app, "regenerate", "Regenerate", true, Some("CmdOrCtrl+R"))?)
-        .item(&MenuItem::with_id(app, "edit_last", "Edit Last Message", true, Some("CmdOrCtrl+E"))?)
+        .item(&MenuItem::with_id(
+            app,
+            "stop",
+            "Stop Generating",
+            true,
+            Some("CmdOrCtrl+Period"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "regenerate",
+            "Regenerate",
+            true,
+            Some("CmdOrCtrl+R"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "edit_last",
+            "Edit Last Message",
+            true,
+            Some("CmdOrCtrl+E"),
+        )?)
         .separator()
-        .item(&MenuItem::with_id(app, "prev_chat", "Previous Chat", true, Some("Shift+CmdOrCtrl+BracketLeft"))?)
-        .item(&MenuItem::with_id(app, "next_chat", "Next Chat", true, Some("Shift+CmdOrCtrl+BracketRight"))?)
+        .item(&MenuItem::with_id(
+            app,
+            "prev_chat",
+            "Previous Chat",
+            true,
+            Some("Shift+CmdOrCtrl+BracketLeft"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "next_chat",
+            "Next Chat",
+            true,
+            Some("Shift+CmdOrCtrl+BracketRight"),
+        )?)
         .build()?;
 
-    let window_menu = SubmenuBuilder::new(app, "Window").minimize().maximize().separator().close_window().build()?;
+    let window_menu = SubmenuBuilder::new(app, "Window")
+        .minimize()
+        .maximize()
+        .separator()
+        .close_window()
+        .build()?;
 
     let menu = MenuBuilder::new(app)
-        .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &chat_menu, &window_menu])
+        .items(&[
+            &app_menu,
+            &file_menu,
+            &edit_menu,
+            &view_menu,
+            &chat_menu,
+            &window_menu,
+        ])
         .build()?;
     app.set_menu(menu)?;
     Ok(())
@@ -178,7 +312,9 @@ pub fn popup<R: Runtime>(window: tauri::Window<R>, items: Vec<ContextItem>) -> t
         if item.separator {
             builder = builder.separator();
         } else {
-            let mi = MenuItemBuilder::with_id(item.id, item.label).enabled(item.enabled).build(app)?;
+            let mi = MenuItemBuilder::with_id(item.id, item.label)
+                .enabled(item.enabled)
+                .build(app)?;
             builder = builder.item(&mi);
         }
     }

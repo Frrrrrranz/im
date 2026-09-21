@@ -62,7 +62,10 @@ impl SseParser {
         let (field, value) = match line.iter().position(|&b| b == b':') {
             Some(i) => {
                 let v = &line[i + 1..];
-                (&line[..i], if v.first() == Some(&b' ') { &v[1..] } else { v })
+                (
+                    &line[..i],
+                    if v.first() == Some(&b' ') { &v[1..] } else { v },
+                )
             }
             None => (line, &line[line.len()..]),
         };
@@ -106,7 +109,11 @@ mod tests {
 
     #[test]
     fn splits_on_blank_lines_across_chunks() {
-        let evs = collect(&["data: {\"a\":1}\n\nda", "ta: {\"b\":2}\n", "\ndata: [DONE]\n\n"]);
+        let evs = collect(&[
+            "data: {\"a\":1}\n\nda",
+            "ta: {\"b\":2}\n",
+            "\ndata: [DONE]\n\n",
+        ]);
         assert_eq!(evs.len(), 3);
         assert_eq!(evs[0].data, "{\"a\":1}");
         assert_eq!(evs[1].data, "{\"b\":2}");
@@ -148,6 +155,12 @@ mod tests {
         for b in text.as_bytes() {
             out.extend(p.push(&[*b]));
         }
-        assert_eq!(out, vec![SseEvent { event: Some("e".into()), data: "hello".into() }]);
+        assert_eq!(
+            out,
+            vec![SseEvent {
+                event: Some("e".into()),
+                data: "hello".into()
+            }]
+        );
     }
 }

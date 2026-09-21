@@ -16,7 +16,9 @@ fn content(role: &str, c: &Content) -> Value {
                 .iter()
                 .map(|p| match p {
                     Part::Text { text } => json!({ "type": "input_text", "text": text }),
-                    Part::ImageUrl { image_url } => json!({ "type": "input_image", "image_url": image_url.url }),
+                    Part::ImageUrl { image_url } => {
+                        json!({ "type": "input_image", "image_url": image_url.url })
+                    }
                 })
                 .collect(),
         ),
@@ -25,8 +27,9 @@ fn content(role: &str, c: &Content) -> Value {
 }
 
 pub fn build(client: &reqwest::Client, req: &TurnRequest) -> reqwest::RequestBuilder {
-    let input: Vec<Value> =
-        turns(&req.messages).map(|(role, m)| json!({ "role": role, "content": content(role, &m.content) })).collect();
+    let input: Vec<Value> = turns(&req.messages)
+        .map(|(role, m)| json!({ "role": role, "content": content(role, &m.content) }))
+        .collect();
 
     let mut body = json!({
         "model": req.model,
@@ -34,7 +37,9 @@ pub fn build(client: &reqwest::Client, req: &TurnRequest) -> reqwest::RequestBui
         "stream": true,
         "store": false,
     });
-    if req.probe { body["max_output_tokens"] = json!(req.max_tokens); }
+    if req.probe {
+        body["max_output_tokens"] = json!(req.max_tokens);
+    }
     if let Some(system) = req.system.as_deref().filter(|s| !s.trim().is_empty()) {
         body["instructions"] = Value::String(system.to_string());
     }
@@ -52,14 +57,21 @@ pub fn build(client: &reqwest::Client, req: &TurnRequest) -> reqwest::RequestBui
 fn usage_from(u: &Value) -> Usage {
     Usage {
         input_tokens: u.get("input_tokens").and_then(Value::as_u64),
-        cached_input_tokens: u.pointer("/input_tokens_details/cached_tokens").and_then(Value::as_u64),
+        cached_input_tokens: u
+            .pointer("/input_tokens_details/cached_tokens")
+            .and_then(Value::as_u64),
         output_tokens: u.get("output_tokens").and_then(Value::as_u64),
-        reasoning_tokens: u.pointer("/output_tokens_details/reasoning_tokens").and_then(Value::as_u64),
+        reasoning_tokens: u
+            .pointer("/output_tokens_details/reasoning_tokens")
+            .and_then(Value::as_u64),
     }
 }
 
 fn error_text(e: &Value) -> String {
-    e.get("message").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| e.to_string())
+    e.get("message")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| e.to_string())
 }
 
 pub fn parse(ev: &SseEvent) -> Parsed {
@@ -71,16 +83,28 @@ pub fn parse(ev: &SseEvent) -> Parsed {
         Ok(v) => v,
         Err(_) => return Ok(vec![]),
     };
-    let kind = v.get("type").and_then(Value::as_str).or(ev.event.as_deref()).unwrap_or("");
+    let kind = v
+        .get("type")
+        .and_then(Value::as_str)
+        .or(ev.event.as_deref())
+        .unwrap_or("");
     let mut out = Vec::new();
     match kind {
         "response.output_text.delta" => {
-            if let Some(t) = v.get("delta").and_then(Value::as_str).filter(|t| !t.is_empty()) {
+            if let Some(t) = v
+                .get("delta")
+                .and_then(Value::as_str)
+                .filter(|t| !t.is_empty())
+            {
                 out.push(StreamEvent::Text(t.to_string()));
             }
         }
         "response.reasoning_summary_text.delta" | "response.reasoning_text.delta" => {
-            if let Some(t) = v.get("delta").and_then(Value::as_str).filter(|t| !t.is_empty()) {
+            if let Some(t) = v
+                .get("delta")
+                .and_then(Value::as_str)
+                .filter(|t| !t.is_empty())
+            {
                 out.push(StreamEvent::Reasoning(t.to_string()));
             }
         }
@@ -91,7 +115,10 @@ pub fn parse(ev: &SseEvent) -> Parsed {
             let reason = if kind == "response.completed" {
                 Some("stop".to_string())
             } else {
-                resp.pointer("/incomplete_details/reason").and_then(Value::as_str).map(str::to_string).or(Some("incomplete".into()))
+                resp.pointer("/incomplete_details/reason")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .or(Some("incomplete".into()))
             };
             if let Some(u) = resp.get("usage") {
                 out.push(StreamEvent::Usage(usage_from(u)));
@@ -99,11 +126,18 @@ pub fn parse(ev: &SseEvent) -> Parsed {
             out.push(StreamEvent::Finish(reason));
         }
         "response.failed" => {
-            let msg = v.pointer("/response/error").map(error_text).unwrap_or_else(|| "response failed".into());
+            let msg = v
+                .pointer("/response/error")
+                .map(error_text)
+                .unwrap_or_else(|| "response failed".into());
             return Err(msg);
         }
         "error" => {
-            return Err(v.get("error").map(error_text).or_else(|| v.get("message").and_then(Value::as_str).map(str::to_string)).unwrap_or_else(|| "stream error".into()));
+            return Err(v
+                .get("error")
+                .map(error_text)
+                .or_else(|| v.get("message").and_then(Value::as_str).map(str::to_string))
+                .unwrap_or_else(|| "stream error".into()));
         }
         _ => {} // response.created, in_progress, output_item.*, content_part.*, output_text.done …
     }
@@ -117,10 +151,20 @@ pub fn parse_complete(body: &str) -> Result<Vec<StreamEvent>, String> {
         return Err(error_text(e));
     }
     let mut out = Vec::new();
-    for item in v.get("output").and_then(Value::as_array).into_iter().flatten() {
+    for item in v
+        .get("output")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
         match item.get("type").and_then(Value::as_str) {
             Some("message") => {
-                for part in item.get("content").and_then(Value::as_array).into_iter().flatten() {
+                for part in item
+                    .get("content")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
                     if part.get("type").and_then(Value::as_str) == Some("output_text") {
                         if let Some(t) = part.get("text").and_then(Value::as_str) {
                             out.push(StreamEvent::Text(t.to_string()));
@@ -129,7 +173,12 @@ pub fn parse_complete(body: &str) -> Result<Vec<StreamEvent>, String> {
                 }
             }
             Some("reasoning") => {
-                for part in item.get("summary").and_then(Value::as_array).into_iter().flatten() {
+                for part in item
+                    .get("summary")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
                     if let Some(t) = part.get("text").and_then(Value::as_str) {
                         out.push(StreamEvent::Reasoning(format!("{t}\n\n")));
                     }
@@ -139,7 +188,10 @@ pub fn parse_complete(body: &str) -> Result<Vec<StreamEvent>, String> {
         }
     }
     out.push(StreamEvent::Finish(
-        v.pointer("/incomplete_details/reason").and_then(Value::as_str).map(str::to_string).or(Some("stop".into())),
+        v.pointer("/incomplete_details/reason")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or(Some("stop".into())),
     ));
     if let Some(u) = v.get("usage") {
         out.push(StreamEvent::Usage(usage_from(u)));
@@ -153,7 +205,10 @@ mod tests {
     use crate::model::{Message, Protocol};
 
     fn ev(event: &str, data: &str) -> SseEvent {
-        SseEvent { event: Some(event.to_string()), data: data.to_string() }
+        SseEvent {
+            event: Some(event.to_string()),
+            data: data.to_string(),
+        }
     }
 
     #[test]
@@ -168,23 +223,51 @@ mod tests {
 
     #[test]
     fn full_stream() {
-        assert!(parse(&ev("response.created", r#"{"type":"response.created","response":{"id":"r"}}"#)).unwrap().is_empty());
-        let r = parse(&ev("response.reasoning_summary_text.delta", r#"{"type":"response.reasoning_summary_text.delta","delta":"Think"}"#)).unwrap();
+        assert!(parse(&ev(
+            "response.created",
+            r#"{"type":"response.created","response":{"id":"r"}}"#
+        ))
+        .unwrap()
+        .is_empty());
+        let r = parse(&ev(
+            "response.reasoning_summary_text.delta",
+            r#"{"type":"response.reasoning_summary_text.delta","delta":"Think"}"#,
+        ))
+        .unwrap();
         assert_eq!(r, vec![StreamEvent::Reasoning("Think".into())]);
-        let t = parse(&ev("response.output_text.delta", r#"{"type":"response.output_text.delta","item_id":"i","delta":"Hi"}"#)).unwrap();
+        let t = parse(&ev(
+            "response.output_text.delta",
+            r#"{"type":"response.output_text.delta","item_id":"i","delta":"Hi"}"#,
+        ))
+        .unwrap();
         assert_eq!(t, vec![StreamEvent::Text("Hi".into())]);
         let done = parse(&ev("response.completed", r#"{"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":7,"output_tokens":9,"output_tokens_details":{"reasoning_tokens":4}}}}"#)).unwrap();
-        assert_eq!(done[0], StreamEvent::Usage(Usage { input_tokens: Some(7), cached_input_tokens: None, output_tokens: Some(9), reasoning_tokens: Some(4) }));
+        assert_eq!(
+            done[0],
+            StreamEvent::Usage(Usage {
+                input_tokens: Some(7),
+                cached_input_tokens: None,
+                output_tokens: Some(9),
+                reasoning_tokens: Some(4)
+            })
+        );
         assert_eq!(done[1], StreamEvent::Finish(Some("stop".into())));
     }
 
     #[test]
     fn incomplete_and_failed() {
         let inc = parse(&ev("response.incomplete", r#"{"type":"response.incomplete","response":{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"}}}"#)).unwrap();
-        assert_eq!(inc, vec![StreamEvent::Finish(Some("max_output_tokens".into()))]);
+        assert_eq!(
+            inc,
+            vec![StreamEvent::Finish(Some("max_output_tokens".into()))]
+        );
         let f = parse(&ev("response.failed", r#"{"type":"response.failed","response":{"error":{"code":"server_error","message":"boom"}}}"#)).unwrap_err();
         assert_eq!(f, "boom");
-        let e = parse(&ev("error", r#"{"type":"error","code":"x","message":"bad","param":null}"#)).unwrap_err();
+        let e = parse(&ev(
+            "error",
+            r#"{"type":"error","code":"x","message":"bad","param":null}"#,
+        ))
+        .unwrap_err();
         assert_eq!(e, "bad");
     }
 

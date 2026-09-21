@@ -66,7 +66,12 @@ fn rename_session(engine: State<'_, Arc<Engine>>, id: String, title: String) -> 
 }
 
 #[tauri::command]
-fn set_session_model(engine: State<'_, Arc<Engine>>, id: String, provider_id: String, model: String) -> Cmd<Session> {
+fn set_session_model(
+    engine: State<'_, Arc<Engine>>,
+    id: String,
+    provider_id: String,
+    model: String,
+) -> Cmd<Session> {
     let store = engine.store();
     let mut s = store.session(&id).map_err(err)?;
     s.provider_id = provider_id;
@@ -76,7 +81,11 @@ fn set_session_model(engine: State<'_, Arc<Engine>>, id: String, provider_id: St
 }
 
 #[tauri::command]
-async fn run_turn(engine: State<'_, Arc<Engine>>, kind: TurnKind, on_event: Channel<TurnEvent>) -> Cmd<()> {
+async fn run_turn(
+    engine: State<'_, Arc<Engine>>,
+    kind: TurnKind,
+    on_event: Channel<TurnEvent>,
+) -> Cmd<()> {
     let engine = engine.inner().clone();
     engine
         .run_turn(kind, move |ev| {
@@ -119,14 +128,26 @@ fn save_provider(engine: State<'_, Arc<Engine>>, input: ProviderInput) -> Cmd<Ve
     let store = engine.store();
     let mut p = input.provider;
     p.id = p.id.trim().to_string();
-    if p.id.is_empty() || !p.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if p.id.is_empty()
+        || !p
+            .id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         return Err("provider id must be alphanumeric".into());
     }
     p.base_url = llm::normalize_base_url(&p.base_url)?;
     p.name = p.name.trim().to_string();
-    if p.name.is_empty() { return Err("Provider name is required.".into()); }
+    if p.name.is_empty() {
+        return Err("Provider name is required.".into());
+    }
     let mut seen = std::collections::HashSet::new();
-    p.models = p.models.into_iter().map(|m| m.trim().to_string()).filter(|m| !m.is_empty() && seen.insert(m.clone())).collect();
+    p.models = p
+        .models
+        .into_iter()
+        .map(|m| m.trim().to_string())
+        .filter(|m| !m.is_empty() && seen.insert(m.clone()))
+        .collect();
     store.upsert_provider(p.clone()).map_err(err)?;
     if let Some(key) = input.api_key {
         store.set_api_key(&p.id, Some(&key)).map_err(err)?;
@@ -156,7 +177,9 @@ async fn fetch_models(
         },
     };
     let base_url = llm::normalize_base_url(&base_url)?;
-    llm::list_models(engine.client(), protocol, &base_url, key.as_deref()).await.map_err(err)
+    llm::list_models(engine.client(), protocol, &base_url, key.as_deref())
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -171,11 +194,21 @@ async fn probe_provider(
     let key = match api_key.filter(|k| !k.trim().is_empty()) {
         Some(k) => Some(k),
         None => match provider_id {
-            Some(id) => engine.store().api_key(&id).map_err(|_| "Unable to read the saved API key.".to_string())?,
+            Some(id) => engine
+                .store()
+                .api_key(&id)
+                .map_err(|_| "Unable to read the saved API key.".to_string())?,
             None => None,
         },
     };
-    Ok(llm::probe(engine.client(), protocol, &base_url, key.as_deref(), model.as_deref()).await)
+    Ok(llm::probe(
+        engine.client(),
+        protocol,
+        &base_url,
+        key.as_deref(),
+        model.as_deref(),
+    )
+    .await)
 }
 
 #[tauri::command]
@@ -188,7 +221,10 @@ fn get_settings(engine: State<'_, Arc<Engine>>) -> Cmd<Settings> {
 #[tauri::command]
 fn save_settings(app: AppHandle, engine: State<'_, Arc<Engine>>, settings: Settings) -> Cmd<()> {
     let store = engine.store();
-    let previous = store.settings().map(|s| s.quick_shortcut).unwrap_or_default();
+    let previous = store
+        .settings()
+        .map(|s| s.quick_shortcut)
+        .unwrap_or_default();
     let mut settings = settings;
     let mut rejected = None;
     if settings.quick_shortcut != previous {
@@ -216,12 +252,17 @@ fn data_dir(engine: State<'_, Arc<Engine>>) -> String {
 #[tauri::command]
 fn reveal_data_dir(app: AppHandle, engine: State<'_, Arc<Engine>>) -> Cmd<()> {
     use tauri_plugin_opener::OpenerExt;
-    app.opener().open_path(engine.store().root().display().to_string(), None::<&str>).map_err(err)
+    app.opener()
+        .open_path(engine.store().root().display().to_string(), None::<&str>)
+        .map_err(err)
 }
 
 #[tauri::command]
 fn export_jsonl(engine: State<'_, Arc<Engine>>, path: String) -> Cmd<usize> {
-    engine.store().export_jsonl(std::path::Path::new(&path)).map_err(err)
+    engine
+        .store()
+        .export_jsonl(std::path::Path::new(&path))
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -243,9 +284,15 @@ fn read_image(path: String) -> Cmd<tauri::ipc::Response> {
     const MAX_BYTES: u64 = 50 * 1024 * 1024;
     let meta = std::fs::metadata(&path).map_err(err)?;
     if meta.len() > MAX_BYTES {
-        return Err(format!("{} is too large ({} MB)", path, meta.len() / 1024 / 1024));
+        return Err(format!(
+            "{} is too large ({} MB)",
+            path,
+            meta.len() / 1024 / 1024
+        ));
     }
-    std::fs::read(&path).map(tauri::ipc::Response::new).map_err(err)
+    std::fs::read(&path)
+        .map(tauri::ipc::Response::new)
+        .map_err(err)
 }
 
 /// Debug builds only: `IM_SCENARIO` / `IM_AUTOSEND` / `IM_ATTACH` / `IM_QUERY` let scripts
@@ -285,7 +332,10 @@ fn log_message(level: String, message: String) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("im=info,webview=info")).init();
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("im=info,webview=info"),
+    )
+    .init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -311,7 +361,9 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "macos")]
                 {
-                    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+                    use window_vibrancy::{
+                        apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState,
+                    };
                     if let Err(e) = apply_vibrancy(
                         &window,
                         NSVisualEffectMaterial::Sidebar,
@@ -413,7 +465,9 @@ pub fn run() {
                     let _ = w.set_focus();
                 }
             }
-            tauri::RunEvent::ExitRequested { api, code: None, .. } => {
+            tauri::RunEvent::ExitRequested {
+                api, code: None, ..
+            } => {
                 // Closing the last window keeps the app alive, as macOS apps do.
                 #[cfg(target_os = "macos")]
                 api.prevent_exit();

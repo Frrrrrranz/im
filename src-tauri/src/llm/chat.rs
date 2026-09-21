@@ -15,10 +15,14 @@ pub fn build(client: &reqwest::Client, req: &TurnRequest) -> reqwest::RequestBui
     // Thinking models (DeepSeek, MiMo, Kimi, …) want their earlier reasoning
     // back under the same field they stream it in; replaying it is what
     // keeps a multi-turn trajectory faithful.
-    messages.extend(turns(&req.messages).map(|(role, m)| match &m.reasoning_content {
-        Some(r) if role == "assistant" && !r.is_empty() => json!({ "role": role, "content": m.content, "reasoning_content": r }),
-        _ => json!({ "role": role, "content": m.content }),
-    }));
+    messages.extend(
+        turns(&req.messages).map(|(role, m)| match &m.reasoning_content {
+            Some(r) if role == "assistant" && !r.is_empty() => {
+                json!({ "role": role, "content": m.content, "reasoning_content": r })
+            }
+            _ => json!({ "role": role, "content": m.content }),
+        }),
+    );
 
     let mut body = json!({
         "model": req.model,
@@ -26,7 +30,9 @@ pub fn build(client: &reqwest::Client, req: &TurnRequest) -> reqwest::RequestBui
         "stream": true,
         "stream_options": { "include_usage": true },
     });
-    if req.probe { body["max_tokens"] = json!(req.max_tokens); }
+    if req.probe {
+        body["max_tokens"] = json!(req.max_tokens);
+    }
 
     let mut rb = client
         .post(join(&req.base_url, "chat/completions"))
@@ -80,7 +86,11 @@ pub fn parse(ev: &SseEvent) -> Parsed {
         return Err(msg);
     }
     let mut out = Vec::new();
-    if let Some(choice) = v.get("choices").and_then(Value::as_array).and_then(|c| c.first()) {
+    if let Some(choice) = v
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|c| c.first())
+    {
         if let Some(delta) = choice.get("delta") {
             // DeepSeek/OpenRouter use `reasoning_content`, others `reasoning`.
             for key in ["reasoning_content", "reasoning"] {
@@ -113,17 +123,30 @@ pub fn parse_complete(body: &str) -> Result<Vec<StreamEvent>, String> {
         return Err(msg);
     }
     let mut out = Vec::new();
-    if let Some(choice) = v.get("choices").and_then(Value::as_array).and_then(|c| c.first()) {
+    if let Some(choice) = v
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|c| c.first())
+    {
         let msg = choice.get("message").cloned().unwrap_or(Value::Null);
         for key in ["reasoning_content", "reasoning"] {
-            if let Some(r) = msg.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()) {
+            if let Some(r) = msg
+                .get(key)
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+            {
                 out.push(StreamEvent::Reasoning(r.to_string()));
             }
         }
         if let Some(t) = msg.get("content").and_then(Value::as_str) {
             out.push(StreamEvent::Text(t.to_string()));
         }
-        out.push(StreamEvent::Finish(choice.get("finish_reason").and_then(Value::as_str).map(str::to_string)));
+        out.push(StreamEvent::Finish(
+            choice
+                .get("finish_reason")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        ));
     }
     if let Some(u) = usage_from(&v) {
         out.push(StreamEvent::Usage(u));
@@ -137,15 +160,34 @@ mod tests {
     use crate::model::{Message, Protocol, Role};
 
     fn ev(data: &str) -> SseEvent {
-        SseEvent { event: None, data: data.to_string() }
+        SseEvent {
+            event: None,
+            data: data.to_string(),
+        }
     }
 
     #[test]
     fn cached_prompt_tokens_openai_and_deepseek() {
         let p = parse(&ev(r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":1,"prompt_tokens_details":{"cached_tokens":8}}}"#)).unwrap();
-        assert_eq!(p, vec![StreamEvent::Usage(Usage { input_tokens: Some(10), cached_input_tokens: Some(8), output_tokens: Some(1), reasoning_tokens: None })]);
+        assert_eq!(
+            p,
+            vec![StreamEvent::Usage(Usage {
+                input_tokens: Some(10),
+                cached_input_tokens: Some(8),
+                output_tokens: Some(1),
+                reasoning_tokens: None
+            })]
+        );
         let p = parse(&ev(r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":1,"prompt_cache_hit_tokens":6,"prompt_cache_miss_tokens":4}}"#)).unwrap();
-        assert_eq!(p, vec![StreamEvent::Usage(Usage { input_tokens: Some(10), cached_input_tokens: Some(6), output_tokens: Some(1), reasoning_tokens: None })]);
+        assert_eq!(
+            p,
+            vec![StreamEvent::Usage(Usage {
+                input_tokens: Some(10),
+                cached_input_tokens: Some(6),
+                output_tokens: Some(1),
+                reasoning_tokens: None
+            })]
+        );
     }
 
     #[test]
@@ -153,16 +195,27 @@ mod tests {
         let p = parse(&ev(r#"{"id":"x","choices":[{"index":0,"delta":{"role":"assistant","content":"Hel"},"finish_reason":null}]}"#)).unwrap();
         assert_eq!(p, vec![StreamEvent::Text("Hel".into())]);
 
-        let p = parse(&ev(r#"{"choices":[{"index":0,"delta":{"reasoning_content":"hmm"},"finish_reason":null}]}"#)).unwrap();
+        let p = parse(&ev(
+            r#"{"choices":[{"index":0,"delta":{"reasoning_content":"hmm"},"finish_reason":null}]}"#,
+        ))
+        .unwrap();
         assert_eq!(p, vec![StreamEvent::Reasoning("hmm".into())]);
 
-        let p = parse(&ev(r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#)).unwrap();
+        let p = parse(&ev(
+            r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#,
+        ))
+        .unwrap();
         assert_eq!(p, vec![StreamEvent::Finish(Some("stop".into()))]);
 
         let p = parse(&ev(r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":5,"completion_tokens_details":{"reasoning_tokens":2}}}"#)).unwrap();
         assert_eq!(
             p,
-            vec![StreamEvent::Usage(Usage { input_tokens: Some(10), cached_input_tokens: None, output_tokens: Some(5), reasoning_tokens: Some(2) })]
+            vec![StreamEvent::Usage(Usage {
+                input_tokens: Some(10),
+                cached_input_tokens: None,
+                output_tokens: Some(5),
+                reasoning_tokens: Some(2)
+            })]
         );
 
         assert!(parse(&ev("[DONE]")).unwrap().is_empty());
@@ -200,14 +253,24 @@ mod tests {
 
     #[test]
     fn earlier_reasoning_is_replayed() {
-        let mut reply = Message { role: Role::Assistant, content: "yo".into(), created_at: None, reasoning_content: Some("why".into()), meta: None };
+        let mut reply = Message {
+            role: Role::Assistant,
+            content: "yo".into(),
+            created_at: None,
+            reasoning_content: Some("why".into()),
+            meta: None,
+        };
         let req = TurnRequest {
             protocol: Protocol::Chat,
             base_url: "http://h/v1".into(),
             api_key: None,
             model: "m".into(),
             system: None,
-            messages: vec![Message::user("hi", "t".into()), reply.clone(), Message::user("more", "t".into())],
+            messages: vec![
+                Message::user("hi", "t".into()),
+                reply.clone(),
+                Message::user("more", "t".into()),
+            ],
             max_tokens: 100,
             probe: false,
         };
@@ -217,7 +280,10 @@ mod tests {
         assert!(body["messages"][0].get("reasoning_content").is_none());
 
         reply.reasoning_content = Some(String::new());
-        let req = TurnRequest { messages: vec![reply], ..req };
+        let req = TurnRequest {
+            messages: vec![reply],
+            ..req
+        };
         let r = build(&reqwest::Client::new(), &req).build().unwrap();
         let body: Value = serde_json::from_slice(r.body().unwrap().as_bytes().unwrap()).unwrap();
         assert!(body["messages"][0].get("reasoning_content").is_none());

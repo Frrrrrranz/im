@@ -57,7 +57,12 @@ pub fn title_from(content: &str) -> String {
     let line = lines
         .clone()
         .find(|l| !l.starts_with('>'))
-        .or_else(|| lines.clone().next().map(|l| l.trim_start_matches('>').trim_start()))
+        .or_else(|| {
+            lines
+                .clone()
+                .next()
+                .map(|l| l.trim_start_matches('>').trim_start())
+        })
         .filter(|l| !l.is_empty())
         .unwrap_or("New chat");
     let mut title: String = line.chars().take(60).collect();
@@ -68,7 +73,10 @@ pub fn title_from(content: &str) -> String {
 }
 
 fn valid_id(id: &str) -> bool {
-    !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 fn write_atomic(path: &Path, bytes: &[u8], _secret: bool) -> Result<()> {
@@ -129,7 +137,11 @@ impl Store {
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
         let mut s = settings.clone();
         s.schema_version = SETTINGS_SCHEMA_VERSION;
-        write_atomic(&self.root.join("settings.json"), &serde_json::to_vec_pretty(&s)?, false)
+        write_atomic(
+            &self.root.join("settings.json"),
+            &serde_json::to_vec_pretty(&s)?,
+            false,
+        )
     }
 
     // ---- providers & keys ----------------------------------------------
@@ -148,7 +160,11 @@ impl Store {
             schema_version: PROVIDERS_SCHEMA_VERSION,
             providers: providers.to_vec(),
         };
-        write_atomic(&self.root.join("providers.json"), &serde_json::to_vec_pretty(&file)?, false)
+        write_atomic(
+            &self.root.join("providers.json"),
+            &serde_json::to_vec_pretty(&file)?,
+            false,
+        )
     }
 
     /// Insert or replace by id.
@@ -178,11 +194,19 @@ impl Store {
     }
 
     fn save_keys(&self, keys: &BTreeMap<String, String>) -> Result<()> {
-        write_atomic(&self.root.join("keys.json"), &serde_json::to_vec_pretty(keys)?, true)
+        write_atomic(
+            &self.root.join("keys.json"),
+            &serde_json::to_vec_pretty(keys)?,
+            true,
+        )
     }
 
     pub fn api_key(&self, provider_id: &str) -> Result<Option<String>> {
-        Ok(self.keys()?.get(provider_id).cloned().filter(|k| !k.is_empty()))
+        Ok(self
+            .keys()?
+            .get(provider_id)
+            .cloned()
+            .filter(|k| !k.is_empty()))
     }
 
     pub fn set_api_key(&self, provider_id: &str, key: Option<&str>) -> Result<()> {
@@ -226,7 +250,11 @@ impl Store {
                 Err(e) => log::warn!("skipping unreadable session {}: {e}", path.display()),
             }
         }
-        out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at).then_with(|| b.id.cmp(&a.id)));
+        out.sort_by(|a, b| {
+            b.updated_at
+                .cmp(&a.updated_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
         Ok(out)
     }
 
@@ -237,7 +265,11 @@ impl Store {
     pub fn save_session(&self, session: &Session) -> Result<()> {
         let mut s = session.clone();
         s.schema_version = SESSION_SCHEMA_VERSION;
-        write_atomic(&self.session_path(&s.id)?, &serde_json::to_vec_pretty(&s)?, false)
+        write_atomic(
+            &self.session_path(&s.id)?,
+            &serde_json::to_vec_pretty(&s)?,
+            false,
+        )
     }
 
     pub fn delete_session(&self, id: &str) -> Result<()> {
@@ -305,7 +337,12 @@ mod tests {
         store.save_session(&session).unwrap();
         session.messages[0] = Message::user("second", now_rfc3339());
         store.save_session(&session).unwrap();
-        assert_eq!(store.session(&session.id).unwrap().messages[0].content.text(), "second");
+        assert_eq!(
+            store.session(&session.id).unwrap().messages[0]
+                .content
+                .text(),
+            "second"
+        );
 
         let mut provider = Provider {
             id: "provider".into(),
@@ -321,7 +358,10 @@ mod tests {
 
         store.set_api_key("provider", Some("first-key")).unwrap();
         store.set_api_key("provider", Some("second-key")).unwrap();
-        assert_eq!(store.api_key("provider").unwrap().as_deref(), Some("second-key"));
+        assert_eq!(
+            store.api_key("provider").unwrap().as_deref(),
+            Some("second-key")
+        );
 
         let export = dir.path().join("export.jsonl");
         fs::write(&export, b"old export").unwrap();
@@ -335,7 +375,10 @@ mod tests {
         let store = Store::new(dir.path().join("中文 data")).unwrap();
         store.set_api_key("provider", Some("first-key")).unwrap();
         store.set_api_key("provider", Some("second-key")).unwrap();
-        assert_eq!(store.api_key("provider").unwrap().as_deref(), Some("second-key"));
+        assert_eq!(
+            store.api_key("provider").unwrap().as_deref(),
+            Some("second-key")
+        );
     }
 
     #[test]
@@ -356,7 +399,11 @@ mod tests {
                 latency_ms: Some(12),
                 ttft_ms: Some(3),
                 thinking_ms: None,
-                usage: Usage { input_tokens: Some(1), output_tokens: Some(2), ..Usage::default() },
+                usage: Usage {
+                    input_tokens: Some(1),
+                    output_tokens: Some(2),
+                    ..Usage::default()
+                },
                 finish_reason: Some("stop".into()),
                 error: None,
             }),
@@ -397,7 +444,12 @@ mod tests {
         store.save_session(&b).unwrap();
         fs::write(store.sessions_dir().join("junk.json"), b"not json").unwrap();
         fs::write(store.sessions_dir().join("notes.txt"), b"ignored").unwrap();
-        let ids: Vec<_> = store.list_sessions().unwrap().into_iter().map(|s| s.id).collect();
+        let ids: Vec<_> = store
+            .list_sessions()
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
         assert_eq!(ids, vec![b.id, a.id]);
     }
 
@@ -428,7 +480,10 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(store.root().join("keys.json")).unwrap().permissions().mode();
+            let mode = fs::metadata(store.root().join("keys.json"))
+                .unwrap()
+                .permissions()
+                .mode();
             assert_eq!(mode & 0o777, 0o600);
         }
 
@@ -454,7 +509,8 @@ mod tests {
         let (dir, store) = store();
         for i in 0..3 {
             let mut s = store.new_session("p", "m", None);
-            s.messages.push(Message::user(format!("q{i}"), now_rfc3339()));
+            s.messages
+                .push(Message::user(format!("q{i}"), now_rfc3339()));
             store.save_session(&s).unwrap();
         }
         let out = dir.path().join("export.jsonl");
@@ -471,7 +527,10 @@ mod tests {
     fn titles_and_ids() {
         assert_eq!(title_from("\n\n  Hello world  \nmore"), "Hello world");
         assert_eq!(title_from(""), "New chat");
-        assert_eq!(title_from("> quoted line\n> second\n\nWhat does it mean?"), "What does it mean?");
+        assert_eq!(
+            title_from("> quoted line\n> second\n\nWhat does it mean?"),
+            "What does it mean?"
+        );
         assert_eq!(title_from("> quoted line\n> second"), "quoted line");
         assert_eq!(title_from(">"), "New chat");
         let long = "x".repeat(100);

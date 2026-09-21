@@ -32,9 +32,17 @@ pub enum EngineError {
 pub enum TurnEvent {
     /// The session after the user message has been persisted (or messages
     /// trimmed for regenerate/edit). Carries the id of a freshly created chat.
-    Started { session: Session },
-    Reasoning { session_id: String, delta: String },
-    Text { session_id: String, delta: String },
+    Started {
+        session: Session,
+    },
+    Reasoning {
+        session_id: String,
+        delta: String,
+    },
+    Text {
+        session_id: String,
+        delta: String,
+    },
     /// Terminal. `message` is the persisted assistant turn, if any content
     /// survived (cancelled turns keep their partial text); `error` is set
     /// when the provider or network failed.
@@ -89,7 +97,11 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(store: Store) -> Self {
-        Engine { store, client: llm::http_client(), active: Mutex::new(HashMap::new()) }
+        Engine {
+            store,
+            client: llm::http_client(),
+            active: Mutex::new(HashMap::new()),
+        }
     }
 
     pub fn store(&self) -> &Store {
@@ -119,12 +131,19 @@ impl Engine {
     fn prepare(&self, kind: &TurnKind) -> Result<Session, EngineError> {
         let now = now_rfc3339();
         let mut session = match kind {
-            TurnKind::Send { session_id, provider_id, model, content, images } => {
+            TurnKind::Send {
+                session_id,
+                provider_id,
+                model,
+                content,
+                images,
+            } => {
                 let mut s = match session_id {
                     Some(id) => self.store.session(id)?,
                     None => {
                         let settings = self.store.settings()?;
-                        self.store.new_session(provider_id, model, settings.system_prompt)
+                        self.store
+                            .new_session(provider_id, model, settings.system_prompt)
                     }
                 };
                 s.provider_id = provider_id.clone();
@@ -133,7 +152,10 @@ impl Engine {
                 if matches!(s.messages.last(), Some(m) if m.role == Role::User) {
                     s.messages.pop();
                 }
-                s.messages.push(Message::user(Content::with_images(content.clone(), images.clone()), now.clone()));
+                s.messages.push(Message::user(
+                    Content::with_images(content.clone(), images.clone()),
+                    now.clone(),
+                ));
                 if s.messages.len() == 1 || s.title == "New chat" {
                     s.title = title_for(content, images);
                 }
@@ -146,7 +168,11 @@ impl Engine {
                 }
                 s
             }
-            TurnKind::Edit { session_id, content, images } => {
+            TurnKind::Edit {
+                session_id,
+                content,
+                images,
+            } => {
                 let mut s = self.store.session(session_id)?;
                 while matches!(s.messages.last(), Some(m) if m.role == Role::Assistant) {
                     s.messages.pop();
@@ -173,7 +199,11 @@ impl Engine {
     /// Run a turn to completion, reporting progress through `emit`.
     /// Errors that happen before the stream starts are returned; everything
     /// after `Started` is reported through `TurnEvent::Done`.
-    pub async fn run_turn(&self, kind: TurnKind, mut emit: impl FnMut(TurnEvent)) -> Result<(), EngineError> {
+    pub async fn run_turn(
+        &self,
+        kind: TurnKind,
+        mut emit: impl FnMut(TurnEvent),
+    ) -> Result<(), EngineError> {
         let session = self.prepare(&kind)?;
         let session_id = session.id.clone();
 
@@ -192,9 +222,14 @@ impl Engine {
             }
             active.insert(session_id.clone(), token.clone());
         }
-        let _guard = ActiveGuard { engine: self, id: session_id.clone() };
+        let _guard = ActiveGuard {
+            engine: self,
+            id: session_id.clone(),
+        };
 
-        emit(TurnEvent::Started { session: session.clone() });
+        emit(TurnEvent::Started {
+            session: session.clone(),
+        });
 
         let request = TurnRequest {
             protocol: provider.protocol,
@@ -209,30 +244,42 @@ impl Engine {
 
         let started = Instant::now();
         let mut acc = Accumulator::default();
-        let result = llm::run(&self.client, &request, &token, |ev| {
-            match &ev {
-                StreamEvent::Reasoning(d) => {
-                    acc.first_token(started);
-                    acc.first_reasoning.get_or_insert_with(Instant::now);
-                    acc.reasoning.push_str(d);
-                    emit(TurnEvent::Reasoning { session_id: session_id.clone(), delta: d.clone() });
-                }
-                StreamEvent::Text(d) => {
-                    acc.first_token(started);
-                    acc.first_text.get_or_insert_with(Instant::now);
-                    acc.text.push_str(d);
-                    emit(TurnEvent::Text { session_id: session_id.clone(), delta: d.clone() });
-                }
-                StreamEvent::Usage(u) => acc.merge_usage(u),
-                StreamEvent::Finish(r) => acc.finish_reason = r.clone(),
+        let result = llm::run(&self.client, &request, &token, |ev| match &ev {
+            StreamEvent::Reasoning(d) => {
+                acc.first_token(started);
+                acc.first_reasoning.get_or_insert_with(Instant::now);
+                acc.reasoning.push_str(d);
+                emit(TurnEvent::Reasoning {
+                    session_id: session_id.clone(),
+                    delta: d.clone(),
+                });
             }
+            StreamEvent::Text(d) => {
+                acc.first_token(started);
+                acc.first_text.get_or_insert_with(Instant::now);
+                acc.text.push_str(d);
+                emit(TurnEvent::Text {
+                    session_id: session_id.clone(),
+                    delta: d.clone(),
+                });
+            }
+            StreamEvent::Usage(u) => acc.merge_usage(u),
+            StreamEvent::Finish(r) => acc.finish_reason = r.clone(),
         })
         .await;
 
         let latency_ms = started.elapsed().as_millis() as u64;
-        let thinking_ms = acc.first_reasoning.map(|r| acc.first_text.unwrap_or_else(Instant::now).duration_since(r).as_millis() as u64);
+        let thinking_ms = acc.first_reasoning.map(|r| {
+            acc.first_text
+                .unwrap_or_else(Instant::now)
+                .duration_since(r)
+                .as_millis() as u64
+        });
         let (finish_reason, error) = match &result {
-            Ok(_) => (acc.finish_reason.take().or_else(|| Some("stop".into())), None),
+            Ok(_) => (
+                acc.finish_reason.take().or_else(|| Some("stop".into())),
+                None,
+            ),
             Err(LlmError::Cancelled) => (Some("cancelled".into()), None),
             Err(e) => (Some("error".into()), Some(e.to_string())),
         };
@@ -243,7 +290,8 @@ impl Engine {
                 role: Role::Assistant,
                 content: Content::Text(std::mem::take(&mut acc.text)),
                 created_at: Some(now_rfc3339()),
-                reasoning_content: Some(std::mem::take(&mut acc.reasoning)).filter(|r| !r.trim().is_empty()),
+                reasoning_content: Some(std::mem::take(&mut acc.reasoning))
+                    .filter(|r| !r.trim().is_empty()),
                 meta: Some(TurnMeta {
                     provider_id: provider.id.clone(),
                     protocol: provider.protocol,
@@ -274,7 +322,12 @@ impl Engine {
             (None, Err(p)) => Some(format!("saving failed: {p}")),
         };
 
-        emit(TurnEvent::Done { session_id, message, error, updated_at: fresh.updated_at });
+        emit(TurnEvent::Done {
+            session_id,
+            message,
+            error,
+            updated_at: fresh.updated_at,
+        });
         Ok(())
     }
 }

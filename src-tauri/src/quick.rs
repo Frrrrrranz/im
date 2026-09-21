@@ -118,7 +118,9 @@ pub fn set_shortcut(app: &AppHandle, shortcut: &str) -> Result<(), String> {
 }
 
 fn toggle(app: &AppHandle) {
-    let Some(w) = app.get_webview_window(WINDOW) else { return };
+    let Some(w) = app.get_webview_window(WINDOW) else {
+        return;
+    };
     if w.is_visible().unwrap_or(false) {
         dismiss(app, true);
         return;
@@ -132,9 +134,23 @@ fn toggle(app: &AppHandle) {
             previous_app: mac::frontmost_app().filter(|&pid| pid != std::process::id() as i32),
         };
     }
-    let model = app.try_state::<Arc<Engine>>().and_then(|e| e.store().settings().ok()).and_then(|s| s.default_model);
-    let payload = ShowPayload { selection, model, access: access_granted() };
-    log::debug!("quick: summoned (selection: {} chars, access: {})", payload.selection.as_deref().map_or(0, |s| s.chars().count()), payload.access);
+    let model = app
+        .try_state::<Arc<Engine>>()
+        .and_then(|e| e.store().settings().ok())
+        .and_then(|s| s.default_model);
+    let payload = ShowPayload {
+        selection,
+        model,
+        access: access_granted(),
+    };
+    log::debug!(
+        "quick: summoned (selection: {} chars, access: {})",
+        payload
+            .selection
+            .as_deref()
+            .map_or(0, |s| s.chars().count()),
+        payload.access
+    );
     if let Some(readiness) = app.try_state::<Readiness>() {
         let mut state = readiness.0.lock().unwrap();
         if !state.0 {
@@ -155,7 +171,9 @@ fn show(app: &AppHandle, payload: ShowPayload) {
 /// that was in front when the shortcut fired (Esc, the shortcut again); a
 /// click elsewhere has already chosen an app, so it passes false.
 fn dismiss(app: &AppHandle, restore: bool) {
-    let Some(w) = app.get_webview_window(WINDOW) else { return };
+    let Some(w) = app.get_webview_window(WINDOW) else {
+        return;
+    };
     if !w.is_visible().unwrap_or(false) {
         return;
     }
@@ -164,12 +182,18 @@ fn dismiss(app: &AppHandle, restore: bool) {
     {
         mac::fade(&w, 0.0, FADE_OUT);
         if restore {
-            if let Some(pid) = app.try_state::<Anchor>().and_then(|a| a.0.lock().unwrap().previous_app) {
+            if let Some(pid) = app
+                .try_state::<Anchor>()
+                .and_then(|a| a.0.lock().unwrap().previous_app)
+            {
                 mac::activate_app(pid);
                 #[cfg(debug_assertions)]
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-                    log::debug!("quick: handed back to pid {pid}; front now {:?}", mac::frontmost_app());
+                    log::debug!(
+                        "quick: handed back to pid {pid}; front now {:?}",
+                        mac::frontmost_app()
+                    );
                 });
             }
         }
@@ -244,7 +268,9 @@ pub fn quick_ready(app: AppHandle) {
 pub fn quick_present(app: AppHandle, height: f64) -> Result<(), String> {
     let w = app.get_webview_window(WINDOW).ok_or("no quick window")?;
     GENERATION.fetch_add(1, Ordering::SeqCst);
-    let mouse = app.try_state::<Anchor>().and_then(|a| a.0.lock().unwrap().mouse);
+    let mouse = app
+        .try_state::<Anchor>()
+        .and_then(|a| a.0.lock().unwrap().mouse);
     log::debug!("quick: present at {mouse:?}, height {height}");
     #[cfg(target_os = "macos")]
     {
@@ -254,7 +280,8 @@ pub fn quick_present(app: AppHandle, height: f64) -> Result<(), String> {
     #[cfg(not(target_os = "macos"))]
     {
         let _ = mouse;
-        w.set_size(tauri::LogicalSize::new(WIDTH, height)).map_err(|e| e.to_string())?;
+        w.set_size(tauri::LogicalSize::new(WIDTH, height))
+            .map_err(|e| e.to_string())?;
         w.show().map_err(|e| e.to_string())?;
         w.set_focus().map_err(|e| e.to_string())?;
     }
@@ -268,7 +295,8 @@ pub fn quick_resize(app: AppHandle, height: f64) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     mac::resize(&w, WIDTH, height.max(40.0));
     #[cfg(not(target_os = "macos"))]
-    w.set_size(tauri::LogicalSize::new(WIDTH, height)).map_err(|e| e.to_string())?;
+    w.set_size(tauri::LogicalSize::new(WIDTH, height))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -290,7 +318,8 @@ pub fn quick_submit(app: AppHandle, text: String) -> Result<(), String> {
         main.show().map_err(|e| e.to_string())?;
         main.set_focus().map_err(|e| e.to_string())?;
     }
-    app.emit_to(MAIN, "quick:send", text).map_err(|e| e.to_string())
+    app.emit_to(MAIN, "quick:send", text)
+        .map_err(|e| e.to_string())
 }
 
 /// Whether the selection in other apps can be read (macOS Accessibility access).
@@ -420,13 +449,20 @@ mod mac {
                     let now: usize = msg_send![ns, styleMask];
                     log::debug!("quick: panel class installed; style mask {mask:#x} → {now:#x}");
                 }
-                _ => log::warn!("quick: NSPanel conversion unavailable; the panel will activate the app"),
+                _ => log::warn!(
+                    "quick: NSPanel conversion unavailable; the panel will activate the app"
+                ),
             }
             let _: () = msg_send![ns, setCollectionBehavior: CAN_JOIN_ALL_SPACES | IGNORES_CYCLE | FULL_SCREEN_AUXILIARY];
             let _: () = msg_send![ns, setAlphaValue: 0.0f64];
         });
         // The panel's app is never active, so the material must not follow the window state.
-        if let Err(e) = apply_vibrancy(w, NSVisualEffectMaterial::Popover, Some(NSVisualEffectState::Active), Some(super::RADIUS)) {
+        if let Err(e) = apply_vibrancy(
+            w,
+            NSVisualEffectMaterial::Popover,
+            Some(NSVisualEffectState::Active),
+            Some(super::RADIUS),
+        ) {
             log::warn!("quick: vibrancy unavailable: {e}");
         }
     }
@@ -466,14 +502,30 @@ mod mac {
     /// below, always inside the visible screen area.
     unsafe fn frame_near(mouse: Option<(f64, f64)>, width: f64, height: f64) -> Rect {
         let (mx, my) = mouse.unwrap_or_else(mouse_location);
-        let area = visible_frame_at(mx, my).unwrap_or(Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { w: 1440.0, h: 900.0 } });
-        let x = clamp(mx - OFFSET_X, area.origin.x + MARGIN, area.max_x() - width - MARGIN);
+        let area = visible_frame_at(mx, my).unwrap_or(Rect {
+            origin: Point { x: 0.0, y: 0.0 },
+            size: Size {
+                w: 1440.0,
+                h: 900.0,
+            },
+        });
+        let x = clamp(
+            mx - OFFSET_X,
+            area.origin.x + MARGIN,
+            area.max_x() - width - MARGIN,
+        );
         let mut y = my - OFFSET_Y - height; // AppKit y grows upward: this is "below the pointer"
         if y < area.origin.y + MARGIN {
             y = my + OFFSET_Y;
         }
         let y = clamp(y, area.origin.y + MARGIN, area.max_y() - height - MARGIN);
-        Rect { origin: Point { x, y }, size: Size { w: width, h: height } }
+        Rect {
+            origin: Point { x, y },
+            size: Size {
+                w: width,
+                h: height,
+            },
+        }
     }
 
     unsafe fn animate_alpha(ns: *mut AnyObject, alpha: f64, duration: f64) {
@@ -485,7 +537,13 @@ mod mac {
         let _: () = msg_send![class!(NSAnimationContext), endGrouping];
     }
 
-    pub fn present(w: &WebviewWindow, mouse: Option<(f64, f64)>, width: f64, height: f64, fade_in: f64) {
+    pub fn present(
+        w: &WebviewWindow,
+        mouse: Option<(f64, f64)>,
+        width: f64,
+        height: f64,
+        fade_in: f64,
+    ) {
         on_main(w, move |ns| unsafe {
             let frame = frame_near(mouse, width, height);
             let _: () = msg_send![ns, setAlphaValue: 0.0f64];
@@ -538,7 +596,13 @@ mod mac {
                     y = area.origin.y + MARGIN;
                 }
             }
-            let frame = Rect { origin: Point { x: cur.origin.x, y }, size: Size { w: width, h: height } };
+            let frame = Rect {
+                origin: Point { x: cur.origin.x, y },
+                size: Size {
+                    w: width,
+                    h: height,
+                },
+            };
             let _: () = msg_send![ns, setFrame: frame, display: true];
             let _: () = msg_send![ns, invalidateShadow];
         });
@@ -560,17 +624,30 @@ mod mac {
         fn AXIsProcessTrusted() -> bool;
         fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
         fn AXUIElementCreateSystemWide() -> AXUIElementRef;
-        fn AXUIElementCopyAttributeValue(element: AXUIElementRef, attribute: CFStringRef, value: *mut CFTypeRef) -> i32;
+        fn AXUIElementCopyAttributeValue(
+            element: AXUIElementRef,
+            attribute: CFStringRef,
+            value: *mut CFTypeRef,
+        ) -> i32;
         fn AXUIElementSetMessagingTimeout(element: AXUIElementRef, timeout: f32) -> i32;
         static kAXTrustedCheckOptionPrompt: CFStringRef;
     }
 
     #[link(name = "CoreFoundation", kind = "framework")]
     extern "C" {
-        fn CFStringCreateWithCString(alloc: *const c_void, cstr: *const c_char, encoding: u32) -> CFStringRef;
+        fn CFStringCreateWithCString(
+            alloc: *const c_void,
+            cstr: *const c_char,
+            encoding: u32,
+        ) -> CFStringRef;
         fn CFStringGetLength(s: CFTypeRef) -> isize;
         fn CFStringGetMaximumSizeForEncoding(length: isize, encoding: u32) -> isize;
-        fn CFStringGetCString(s: CFTypeRef, buffer: *mut c_char, size: isize, encoding: u32) -> bool;
+        fn CFStringGetCString(
+            s: CFTypeRef,
+            buffer: *mut c_char,
+            size: isize,
+            encoding: u32,
+        ) -> bool;
         fn CFGetTypeID(cf: CFTypeRef) -> usize;
         fn CFStringGetTypeID() -> usize;
         fn CFDictionaryCreate(

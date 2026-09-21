@@ -31,7 +31,11 @@ async fn serve() -> String {
                         let head = String::from_utf8_lossy(&buf[..pos]).to_string();
                         let len = head
                             .lines()
-                            .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap()))
+                            .find_map(|l| {
+                                l.to_ascii_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .map(|v| v.trim().parse::<usize>().unwrap())
+                            })
                             .unwrap_or(0);
                         break (pos + 4, len);
                     }
@@ -45,7 +49,14 @@ async fn serve() -> String {
                 }
                 let head = String::from_utf8_lossy(&buf[..head_end]).to_string();
                 let body = String::from_utf8_lossy(&buf[head_end..]).to_string();
-                let path = head.lines().next().unwrap().split(' ').nth(1).unwrap().to_string();
+                let path = head
+                    .lines()
+                    .next()
+                    .unwrap()
+                    .split(' ')
+                    .nth(1)
+                    .unwrap()
+                    .to_string();
                 respond(&mut sock, &path, &head, &body).await;
             });
         }
@@ -54,7 +65,11 @@ async fn serve() -> String {
 }
 
 async fn write_sse(sock: &mut tokio::net::TcpStream, events: &[&str]) {
-    sock.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n").await.unwrap();
+    sock.write_all(
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n",
+    )
+    .await
+    .unwrap();
     for ev in events {
         sock.write_all(ev.as_bytes()).await.unwrap();
         sock.flush().await.unwrap();
@@ -83,9 +98,15 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
         .and_then(|rest| rest.split('/').next())
     {
         let data = match category {
-            "auth" => r#"{"error":{"type":"authentication_error","code":"invalid_api_key","message":"Incorrect API key: probe-secret-value"}}"#,
-            "rate" => r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#,
-            "model" => r#"{"type":"error","error":{"code":"model_not_found","message":"model not found"}}"#,
+            "auth" => {
+                r#"{"error":{"type":"authentication_error","code":"invalid_api_key","message":"Incorrect API key: probe-secret-value"}}"#
+            }
+            "rate" => {
+                r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#
+            }
+            "model" => {
+                r#"{"type":"error","error":{"code":"model_not_found","message":"model not found"}}"#
+            }
             _ => r#"{"error":{"message":"provider overloaded"}}"#,
         };
         let event = if path.ends_with("/messages") {
@@ -100,7 +121,9 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
     }
     match path {
         "/v1/chat/completions" => {
-            assert!(head.to_ascii_lowercase().contains("authorization: bearer key-1"));
+            assert!(head
+                .to_ascii_lowercase()
+                .contains("authorization: bearer key-1"));
             assert!(body.contains("\"stream\":true"));
             write_sse(
                 sock,
@@ -119,7 +142,9 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
             assert!(lower.contains("x-api-key: key-1"), "head was: {head}");
             assert!(lower.contains("anthropic-version: 2023-06-01"));
             assert!(body.contains("\"max_tokens\":8192") || body.contains("\"max_tokens\":1"));
-            if body.contains("\"max_tokens\":8192") { assert!(body.contains("\"system\":\"be terse\"")); }
+            if body.contains("\"max_tokens\":8192") {
+                assert!(body.contains("\"system\":\"be terse\""));
+            }
             write_sse(
                 sock,
                 &[
@@ -149,15 +174,29 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
         "/img/chat/completions" => {
             let v: serde_json::Value = serde_json::from_str(body).unwrap();
             let user = &v["messages"][1]; // after the system message
-            assert_eq!(user["content"][0], serde_json::json!({ "type": "text", "text": "see" }), "body was: {body}");
-            assert_eq!(user["content"][1], serde_json::json!({ "type": "image_url", "image_url": { "url": "data:image/png;base64,AAAA" } }));
+            assert_eq!(
+                user["content"][0],
+                serde_json::json!({ "type": "text", "text": "see" }),
+                "body was: {body}"
+            );
+            assert_eq!(
+                user["content"][1],
+                serde_json::json!({ "type": "image_url", "image_url": { "url": "data:image/png;base64,AAAA" } })
+            );
             write_sse(sock, &["data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n", "data: [DONE]\n\n"]).await;
         }
         "/img/messages" => {
             let v: serde_json::Value = serde_json::from_str(body).unwrap();
             let user = &v["messages"][0];
-            assert_eq!(user["content"][0], serde_json::json!({ "type": "text", "text": "see" }), "body was: {body}");
-            assert_eq!(user["content"][1], serde_json::json!({ "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": "AAAA" } }));
+            assert_eq!(
+                user["content"][0],
+                serde_json::json!({ "type": "text", "text": "see" }),
+                "body was: {body}"
+            );
+            assert_eq!(
+                user["content"][1],
+                serde_json::json!({ "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": "AAAA" } })
+            );
             write_sse(
                 sock,
                 &[
@@ -171,8 +210,15 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
         "/img/responses" => {
             let v: serde_json::Value = serde_json::from_str(body).unwrap();
             let user = &v["input"][0];
-            assert_eq!(user["content"][0], serde_json::json!({ "type": "input_text", "text": "see" }), "body was: {body}");
-            assert_eq!(user["content"][1], serde_json::json!({ "type": "input_image", "image_url": "data:image/png;base64,AAAA" }));
+            assert_eq!(
+                user["content"][0],
+                serde_json::json!({ "type": "input_text", "text": "see" }),
+                "body was: {body}"
+            );
+            assert_eq!(
+                user["content"][1],
+                serde_json::json!({ "type": "input_image", "image_url": "data:image/png;base64,AAAA" })
+            );
             write_sse(
                 sock,
                 &[
@@ -190,8 +236,16 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
             let _ = sock.shutdown().await;
         }
         "/slow/chat/completions" => {
-            sock.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n").await.unwrap();
-            sock.write_all(b"data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"}}]}\n\n").await.unwrap();
+            sock.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .unwrap();
+            sock.write_all(
+                b"data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"}}]}\n\n",
+            )
+            .await
+            .unwrap();
             sock.flush().await.unwrap();
             // Then hang: the client must cancel.
             tokio::time::sleep(Duration::from_secs(30)).await;
@@ -239,14 +293,22 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
             write_sse(sock, &["data: [DONE]\n\n"]).await;
         }
         "/manual/models" => {
-            sock.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+            sock.write_all(
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .unwrap();
         }
         "/manual/chat/completions" => {
             assert!(body.contains("\"max_tokens\":1"));
             write_sse(sock, &["data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n"]).await;
         }
         "/incomplete/chat/completions" => {
-            write_sse(sock, &["data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n"]).await;
+            write_sse(
+                sock,
+                &["data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n"],
+            )
+            .await;
         }
         "/secret/chat/completions" => {
             let body = r#"{"error":{"message":"sensitive-key was rejected"}}"#;
@@ -254,7 +316,11 @@ async fn respond(sock: &mut tokio::net::TcpStream, path: &str, head: &str, body:
             let _ = sock.shutdown().await;
         }
         _ => {
-            sock.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+            sock.write_all(
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .unwrap();
         }
     }
 }
@@ -285,7 +351,13 @@ fn collect() -> (Arc<Mutex<Vec<TurnEvent>>>, impl FnMut(TurnEvent)) {
 }
 
 fn send(content: &str) -> TurnKind {
-    TurnKind::Send { session_id: None, provider_id: "p".into(), model: "m".into(), content: content.into(), images: vec![] }
+    TurnKind::Send {
+        session_id: None,
+        provider_id: "p".into(),
+        model: "m".into(),
+        content: content.into(),
+        images: vec![],
+    }
 }
 
 #[tokio::test]
@@ -296,17 +368,39 @@ async fn chat_protocol_round_trip_persists_trajectory() {
     engine.run_turn(send("hello"), emit).await.unwrap();
 
     let events = events.lock().unwrap().clone();
-    let TurnEvent::Started { session } = &events[0] else { panic!("expected Started, got {:?}", events[0]) };
+    let TurnEvent::Started { session } = &events[0] else {
+        panic!("expected Started, got {:?}", events[0])
+    };
     assert_eq!(session.messages.len(), 1);
     assert_eq!(session.title, "hello");
     assert_eq!(session.system.as_deref(), Some("be terse"));
 
-    let text: String = events.iter().filter_map(|e| if let TurnEvent::Text { delta, .. } = e { Some(delta.as_str()) } else { None }).collect();
+    let text: String = events
+        .iter()
+        .filter_map(|e| {
+            if let TurnEvent::Text { delta, .. } = e {
+                Some(delta.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
     assert_eq!(text, "Hello");
-    let reasoning: String = events.iter().filter_map(|e| if let TurnEvent::Reasoning { delta, .. } = e { Some(delta.as_str()) } else { None }).collect();
+    let reasoning: String = events
+        .iter()
+        .filter_map(|e| {
+            if let TurnEvent::Reasoning { delta, .. } = e {
+                Some(delta.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
     assert_eq!(reasoning, "think");
 
-    let TurnEvent::Done { message, error, .. } = events.last().unwrap() else { panic!() };
+    let TurnEvent::Done { message, error, .. } = events.last().unwrap() else {
+        panic!()
+    };
     assert!(error.is_none());
     let m = message.as_ref().unwrap();
     assert_eq!(m.role, Role::Assistant);
@@ -327,12 +421,26 @@ async fn chat_protocol_round_trip_persists_trajectory() {
     // Second turn on the same session appends; the request carries both prior messages.
     let (events2, emit2) = collect();
     engine
-        .run_turn(TurnKind::Send { session_id: Some(session.id.clone()), provider_id: "p".into(), model: "m".into(), content: "again".into(), images: vec![] }, emit2)
+        .run_turn(
+            TurnKind::Send {
+                session_id: Some(session.id.clone()),
+                provider_id: "p".into(),
+                model: "m".into(),
+                content: "again".into(),
+                images: vec![],
+            },
+            emit2,
+        )
         .await
         .unwrap();
-    let TurnEvent::Started { session: s2 } = &events2.lock().unwrap()[0] else { panic!() };
+    let TurnEvent::Started { session: s2 } = &events2.lock().unwrap()[0] else {
+        panic!()
+    };
     assert_eq!(s2.messages.len(), 3);
-    assert_eq!(engine.store().session(&session.id).unwrap().messages.len(), 4);
+    assert_eq!(
+        engine.store().session(&session.id).unwrap().messages.len(),
+        4
+    );
 }
 
 #[tokio::test]
@@ -342,7 +450,10 @@ async fn anthropic_and_responses_protocols() {
     let (_d1, engine) = engine_with(&base, Protocol::Anthropic, "v1");
     let (events, emit) = collect();
     engine.run_turn(send("hi"), emit).await.unwrap();
-    let TurnEvent::Done { message, error, .. } = events.lock().unwrap().last().unwrap().clone() else { panic!() };
+    let TurnEvent::Done { message, error, .. } = events.lock().unwrap().last().unwrap().clone()
+    else {
+        panic!()
+    };
     assert!(error.is_none());
     let m = message.unwrap();
     assert_eq!(m.content.text(), "Hi there");
@@ -350,12 +461,18 @@ async fn anthropic_and_responses_protocols() {
     let meta = m.meta.unwrap();
     assert_eq!(meta.protocol, Protocol::Anthropic);
     assert_eq!(meta.finish_reason.as_deref(), Some("end_turn"));
-    assert_eq!((meta.usage.input_tokens, meta.usage.output_tokens), (Some(20), Some(7)));
+    assert_eq!(
+        (meta.usage.input_tokens, meta.usage.output_tokens),
+        (Some(20), Some(7))
+    );
 
     let (_d2, engine) = engine_with(&base, Protocol::Responses, "v1");
     let (events, emit) = collect();
     engine.run_turn(send("hi"), emit).await.unwrap();
-    let TurnEvent::Done { message, error, .. } = events.lock().unwrap().last().unwrap().clone() else { panic!() };
+    let TurnEvent::Done { message, error, .. } = events.lock().unwrap().last().unwrap().clone()
+    else {
+        panic!()
+    };
     assert!(error.is_none());
     let m = message.unwrap();
     assert_eq!(m.content.text(), "Yo");
@@ -370,10 +487,17 @@ async fn http_error_leaves_user_message_and_no_reply() {
     let (events, emit) = collect();
     engine.run_turn(send("hello"), emit).await.unwrap();
     let events = events.lock().unwrap().clone();
-    let TurnEvent::Started { session } = &events[0] else { panic!() };
-    let TurnEvent::Done { message, error, .. } = events.last().unwrap() else { panic!() };
+    let TurnEvent::Started { session } = &events[0] else {
+        panic!()
+    };
+    let TurnEvent::Done { message, error, .. } = events.last().unwrap() else {
+        panic!()
+    };
     assert!(message.is_none());
-    assert_eq!(error.as_deref(), Some("HTTP 401: Incorrect API key provided"));
+    assert_eq!(
+        error.as_deref(),
+        Some("HTTP 401: Incorrect API key provided")
+    );
     let saved = engine.store().session(&session.id).unwrap();
     assert_eq!(saved.messages.len(), 1);
     assert_eq!(saved.messages[0].role, Role::User);
@@ -381,10 +505,21 @@ async fn http_error_leaves_user_message_and_no_reply() {
     // Retrying replaces the dangling user message instead of stacking a second one.
     let (events2, emit2) = collect();
     engine
-        .run_turn(TurnKind::Send { session_id: Some(session.id.clone()), provider_id: "p".into(), model: "m".into(), content: "hello again".into(), images: vec![] }, emit2)
+        .run_turn(
+            TurnKind::Send {
+                session_id: Some(session.id.clone()),
+                provider_id: "p".into(),
+                model: "m".into(),
+                content: "hello again".into(),
+                images: vec![],
+            },
+            emit2,
+        )
         .await
         .unwrap();
-    let TurnEvent::Started { session: s2 } = &events2.lock().unwrap()[0] else { panic!() };
+    let TurnEvent::Started { session: s2 } = &events2.lock().unwrap()[0] else {
+        panic!()
+    };
     assert_eq!(s2.messages.len(), 1);
     assert_eq!(s2.messages[0].content.text(), "hello again");
 }
@@ -403,15 +538,32 @@ async fn cancel_keeps_partial_text() {
         }
         sink.lock().unwrap().push(e);
     };
-    tokio::time::timeout(Duration::from_secs(5), engine.run_turn(send("go"), emit)).await.expect("cancel must end the turn").unwrap();
+    tokio::time::timeout(Duration::from_secs(5), engine.run_turn(send("go"), emit))
+        .await
+        .expect("cancel must end the turn")
+        .unwrap();
 
     let events = events.lock().unwrap();
-    let TurnEvent::Done { message, error, session_id, .. } = events.last().unwrap() else { panic!() };
+    let TurnEvent::Done {
+        message,
+        error,
+        session_id,
+        ..
+    } = events.last().unwrap()
+    else {
+        panic!()
+    };
     assert!(error.is_none());
     let m = message.as_ref().unwrap();
     assert_eq!(m.content.text(), "partial");
-    assert_eq!(m.meta.as_ref().unwrap().finish_reason.as_deref(), Some("cancelled"));
-    assert_eq!(engine.store().session(session_id).unwrap().messages.len(), 2);
+    assert_eq!(
+        m.meta.as_ref().unwrap().finish_reason.as_deref(),
+        Some("cancelled")
+    );
+    assert_eq!(
+        engine.store().session(session_id).unwrap().messages.len(),
+        2
+    );
     assert!(!engine.is_active(session_id));
 }
 
@@ -421,7 +573,9 @@ async fn non_streaming_json_reply_is_accepted() {
     let (_dir, engine) = engine_with(&base, Protocol::Chat, "json");
     let (events, emit) = collect();
     engine.run_turn(send("x"), emit).await.unwrap();
-    let TurnEvent::Done { message, .. } = events.lock().unwrap().last().unwrap().clone() else { panic!() };
+    let TurnEvent::Done { message, .. } = events.lock().unwrap().last().unwrap().clone() else {
+        panic!()
+    };
     assert_eq!(message.unwrap().content.text(), "whole");
 }
 
@@ -436,12 +590,30 @@ async fn regenerate_and_edit_rewrite_the_newest_exchange() {
         _ => panic!(),
     };
 
-    engine.run_turn(TurnKind::Regenerate { session_id: id.clone() }, |_| {}).await.unwrap();
+    engine
+        .run_turn(
+            TurnKind::Regenerate {
+                session_id: id.clone(),
+            },
+            |_| {},
+        )
+        .await
+        .unwrap();
     let s = engine.store().session(&id).unwrap();
     assert_eq!(s.messages.len(), 2, "regenerate replaces, never appends");
     assert_eq!(s.messages[0].content.text(), "first");
 
-    engine.run_turn(TurnKind::Edit { session_id: id.clone(), content: "edited".into(), images: vec![] }, |_| {}).await.unwrap();
+    engine
+        .run_turn(
+            TurnKind::Edit {
+                session_id: id.clone(),
+                content: "edited".into(),
+                images: vec![],
+            },
+            |_| {},
+        )
+        .await
+        .unwrap();
     let s = engine.store().session(&id).unwrap();
     assert_eq!(s.messages.len(), 2);
     assert_eq!(s.messages[0].content.text(), "edited");
@@ -459,12 +631,23 @@ async fn busy_session_rejects_second_turn() {
     let id = loop {
         tokio::time::sleep(Duration::from_millis(20)).await;
         let ev = events.lock().unwrap();
-        if let Some(TurnEvent::Text { session_id, .. }) = ev.iter().find(|e| matches!(e, TurnEvent::Text { .. })) {
+        if let Some(TurnEvent::Text { session_id, .. }) =
+            ev.iter().find(|e| matches!(e, TurnEvent::Text { .. }))
+        {
             break session_id.clone();
         }
     };
     let err = engine
-        .run_turn(TurnKind::Send { session_id: Some(id.clone()), provider_id: "p".into(), model: "m".into(), content: "again".into(), images: vec![] }, |_| {})
+        .run_turn(
+            TurnKind::Send {
+                session_id: Some(id.clone()),
+                provider_id: "p".into(),
+                model: "m".into(),
+                content: "again".into(),
+                images: vec![],
+            },
+            |_| {},
+        )
         .await
         .unwrap_err();
     assert_eq!(err.to_string(), "this chat is already generating");
@@ -476,7 +659,9 @@ async fn busy_session_rejects_second_turn() {
 async fn list_models_sorted() {
     let base = serve().await;
     let client = im_lib::llm::http_client();
-    let ids = im_lib::llm::list_models(&client, Protocol::Chat, &format!("{base}/v1"), Some("k")).await.unwrap();
+    let ids = im_lib::llm::list_models(&client, Protocol::Chat, &format!("{base}/v1"), Some("k"))
+        .await
+        .unwrap();
     assert_eq!(ids, vec!["a-model", "b-model"]);
 }
 
@@ -486,9 +671,23 @@ async fn images_reach_every_protocol_and_are_stored_as_parts() {
     for protocol in [Protocol::Chat, Protocol::Anthropic, Protocol::Responses] {
         let (_dir, engine) = engine_with(&base, protocol, "img");
         let (events, emit) = collect();
-        let kind = TurnKind::Send { session_id: None, provider_id: "p".into(), model: "m".into(), content: "see".into(), images: vec!["data:image/png;base64,AAAA".into()] };
+        let kind = TurnKind::Send {
+            session_id: None,
+            provider_id: "p".into(),
+            model: "m".into(),
+            content: "see".into(),
+            images: vec!["data:image/png;base64,AAAA".into()],
+        };
         engine.run_turn(kind, emit).await.unwrap();
-        let TurnEvent::Done { message, error, session_id, .. } = events.lock().unwrap().last().unwrap().clone() else { panic!() };
+        let TurnEvent::Done {
+            message,
+            error,
+            session_id,
+            ..
+        } = events.lock().unwrap().last().unwrap().clone()
+        else {
+            panic!()
+        };
         assert!(error.is_none(), "{protocol:?}: {error:?}");
         assert_eq!(message.unwrap().content.text(), "ok");
 
@@ -496,7 +695,10 @@ async fn images_reach_every_protocol_and_are_stored_as_parts() {
         let saved = engine.store().session(&session_id).unwrap();
         assert!(matches!(saved.messages[0].content, Content::Parts(_)));
         assert_eq!(saved.messages[0].content.text(), "see");
-        assert_eq!(saved.messages[0].content.images(), vec!["data:image/png;base64,AAAA"]);
+        assert_eq!(
+            saved.messages[0].content.images(),
+            vec!["data:image/png;base64,AAAA"]
+        );
         assert!(matches!(saved.messages[1].content, Content::Text(_)));
         assert_eq!(saved.title, "see");
     }
@@ -506,8 +708,19 @@ async fn provider_probe_streams_each_protocol_and_reports_status() {
     let base = serve().await;
     let client = im_lib::llm::http_client();
     for protocol in [Protocol::Chat, Protocol::Anthropic, Protocol::Responses] {
-        let result = im_lib::llm::probe(&client, protocol, &format!("{base}/v1"), Some("key-1"), Some("m")).await;
-        assert!(result.ok, "{protocol:?}: {} ({:?})", result.message, result.detail);
+        let result = im_lib::llm::probe(
+            &client,
+            protocol,
+            &format!("{base}/v1"),
+            Some("key-1"),
+            Some("m"),
+        )
+        .await;
+        assert!(
+            result.ok,
+            "{protocol:?}: {} ({:?})",
+            result.message, result.detail
+        );
         assert!(result.stream_ok);
         assert_eq!(result.status, Some(200));
         assert_eq!(result.model_count, Some(2));
@@ -517,34 +730,79 @@ async fn provider_probe_streams_each_protocol_and_reports_status() {
 #[tokio::test]
 async fn provider_probe_uses_manual_model_when_models_route_is_missing() {
     let base = serve().await;
-    let result = im_lib::llm::probe(&im_lib::llm::http_client(), Protocol::Chat, &format!("{base}/manual"), Some("key-1"), Some("custom-model")).await;
+    let result = im_lib::llm::probe(
+        &im_lib::llm::http_client(),
+        Protocol::Chat,
+        &format!("{base}/manual"),
+        Some("key-1"),
+        Some("custom-model"),
+    )
+    .await;
     assert!(result.ok, "{}", result.message);
     assert!(result.stream_ok);
     assert_eq!(result.model_count, None);
-    assert!(result.models_warning.as_deref().unwrap().contains("HTTP 404"));
+    assert!(result
+        .models_warning
+        .as_deref()
+        .unwrap()
+        .contains("HTTP 404"));
 }
 
 #[tokio::test]
 async fn provider_probe_rejects_incomplete_stream_and_redacts_provider_body() {
     let base = serve().await;
     let client = im_lib::llm::http_client();
-    let incomplete = im_lib::llm::probe(&client, Protocol::Chat, &format!("{base}/incomplete"), Some("key-1"), Some("m")).await;
+    let incomplete = im_lib::llm::probe(
+        &client,
+        Protocol::Chat,
+        &format!("{base}/incomplete"),
+        Some("key-1"),
+        Some("m"),
+    )
+    .await;
     assert!(!incomplete.ok);
-    assert_eq!(incomplete.error_category, Some(im_lib::llm::ProbeErrorKind::IncompleteStream));
+    assert_eq!(
+        incomplete.error_category,
+        Some(im_lib::llm::ProbeErrorKind::IncompleteStream)
+    );
 
-    let rejected = im_lib::llm::probe(&client, Protocol::Chat, &format!("{base}/secret"), Some("sensitive-key"), Some("m")).await;
+    let rejected = im_lib::llm::probe(
+        &client,
+        Protocol::Chat,
+        &format!("{base}/secret"),
+        Some("sensitive-key"),
+        Some("m"),
+    )
+    .await;
     assert!(!rejected.ok);
-    assert_eq!(rejected.error_category, Some(im_lib::llm::ProbeErrorKind::Authentication));
+    assert_eq!(
+        rejected.error_category,
+        Some(im_lib::llm::ProbeErrorKind::Authentication)
+    );
     assert!(!rejected.message.contains("sensitive-key"));
-    assert!(!rejected.detail.as_deref().unwrap_or_default().contains("sensitive-key"));
+    assert!(!rejected
+        .detail
+        .as_deref()
+        .unwrap_or_default()
+        .contains("sensitive-key"));
 }
 #[tokio::test]
 async fn provider_probe_rejects_wrong_models_shape_with_status() {
     let base = serve().await;
-    let result = im_lib::llm::probe(&im_lib::llm::http_client(), Protocol::Chat, &format!("{base}/badjson"), Some("key-1"), None).await;
+    let result = im_lib::llm::probe(
+        &im_lib::llm::http_client(),
+        Protocol::Chat,
+        &format!("{base}/badjson"),
+        Some("key-1"),
+        None,
+    )
+    .await;
     assert!(!result.ok);
     assert_eq!(result.status, Some(200));
-    assert_eq!(result.error_category, Some(im_lib::llm::ProbeErrorKind::UnexpectedResponse));
+    assert_eq!(
+        result.error_category,
+        Some(im_lib::llm::ProbeErrorKind::UnexpectedResponse)
+    );
 }
 
 #[tokio::test]
@@ -570,7 +828,11 @@ async fn provider_probe_classifies_model_list_http_errors_without_exposing_bodie
         assert_eq!(result.status, Some(status));
         assert_eq!(result.error_category, Some(category));
         assert!(!result.message.contains("probe-secret-value"));
-        assert!(!result.detail.as_deref().unwrap_or_default().contains("probe-secret-value"));
+        assert!(!result
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("probe-secret-value"));
     }
 }
 
@@ -588,8 +850,15 @@ async fn provider_probe_models_shape_errors_and_empty_lists() {
         .await;
         assert!(!result.ok, "{path}");
         assert_eq!(result.status, Some(200));
-        assert_eq!(result.error_category, Some(im_lib::llm::ProbeErrorKind::UnexpectedResponse));
-        assert!(!result.detail.as_deref().unwrap_or_default().contains("probe-secret-value"));
+        assert_eq!(
+            result.error_category,
+            Some(im_lib::llm::ProbeErrorKind::UnexpectedResponse)
+        );
+        assert!(!result
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("probe-secret-value"));
     }
 
     let empty = im_lib::llm::probe(
@@ -609,10 +878,26 @@ async fn provider_probe_models_shape_errors_and_empty_lists() {
 async fn provider_probe_classifies_http_200_stream_errors_for_each_protocol() {
     let base = serve().await;
     let cases = [
-        ("auth", Protocol::Chat, im_lib::llm::ProbeErrorKind::Authentication),
-        ("rate", Protocol::Anthropic, im_lib::llm::ProbeErrorKind::RateLimited),
-        ("model", Protocol::Responses, im_lib::llm::ProbeErrorKind::ModelUnavailable),
-        ("overloaded", Protocol::Chat, im_lib::llm::ProbeErrorKind::Provider),
+        (
+            "auth",
+            Protocol::Chat,
+            im_lib::llm::ProbeErrorKind::Authentication,
+        ),
+        (
+            "rate",
+            Protocol::Anthropic,
+            im_lib::llm::ProbeErrorKind::RateLimited,
+        ),
+        (
+            "model",
+            Protocol::Responses,
+            im_lib::llm::ProbeErrorKind::ModelUnavailable,
+        ),
+        (
+            "overloaded",
+            Protocol::Chat,
+            im_lib::llm::ProbeErrorKind::Provider,
+        ),
     ];
     for (category, protocol, expected) in cases {
         let result = im_lib::llm::probe(
@@ -628,7 +913,11 @@ async fn provider_probe_classifies_http_200_stream_errors_for_each_protocol() {
         assert_eq!(result.status, Some(200));
         assert_eq!(result.error_category, Some(expected));
         assert!(!result.message.contains("probe-secret-value"));
-        assert!(!result.detail.as_deref().unwrap_or_default().contains("probe-secret-value"));
+        assert!(!result
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("probe-secret-value"));
     }
 }
 
@@ -648,7 +937,10 @@ async fn provider_probe_short_timeout_and_cancellation_do_not_wait_for_probe_dea
         None,
     )
     .await;
-    assert_eq!(models_timeout.error_category, Some(im_lib::llm::ProbeErrorKind::Timeout));
+    assert_eq!(
+        models_timeout.error_category,
+        Some(im_lib::llm::ProbeErrorKind::Timeout)
+    );
 
     let stream_timeout = im_lib::llm::probe(
         &short_client,
@@ -658,7 +950,10 @@ async fn provider_probe_short_timeout_and_cancellation_do_not_wait_for_probe_dea
         Some("manual-model"),
     )
     .await;
-    assert_eq!(stream_timeout.error_category, Some(im_lib::llm::ProbeErrorKind::Timeout));
+    assert_eq!(
+        stream_timeout.error_category,
+        Some(im_lib::llm::ProbeErrorKind::Timeout)
+    );
 
     let cancelled = tokio::time::timeout(
         Duration::from_millis(40),
@@ -671,7 +966,10 @@ async fn provider_probe_short_timeout_and_cancellation_do_not_wait_for_probe_dea
         ),
     )
     .await;
-    assert!(cancelled.is_err(), "dropping the probe future cancels its network request");
+    assert!(
+        cancelled.is_err(),
+        "dropping the probe future cancels its network request"
+    );
 }
 
 #[tokio::test]
@@ -687,5 +985,8 @@ async fn provider_probe_only_done_marker_is_an_incomplete_stream() {
     .await;
     assert!(!result.ok);
     assert_eq!(result.status, Some(200));
-    assert_eq!(result.error_category, Some(im_lib::llm::ProbeErrorKind::IncompleteStream));
+    assert_eq!(
+        result.error_category,
+        Some(im_lib::llm::ProbeErrorKind::IncompleteStream)
+    );
 }
